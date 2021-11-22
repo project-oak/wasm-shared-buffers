@@ -22,6 +22,7 @@ WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 
 setup_deps() {
+  clean_all_wasm
   mkdir -p deps
   cd deps
   if [ ! -d wasm-micro-runtime ]; then
@@ -51,6 +52,10 @@ check_gtk4() {
     echo "gtk4 dev libraries are required: please run 'sudo apt-get install libgtk-4-dev'"
     exit 1
   fi
+}
+
+clean_all_wasm() {
+    rm -f gtk-*/{hunter.wasm,runner.wasm} # Clean out the wasm modules to avoid accidents
 }
 
 build_wasm() {
@@ -101,6 +106,7 @@ case "$1" in
     ;;
 
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
+    setup_deps
     (
       cd gtk-rust && \
         cargo build
@@ -126,6 +132,7 @@ case "$1" in
     ;;
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
+    setup_deps
     cd gtk-rust
     cargo build
     cargo run
