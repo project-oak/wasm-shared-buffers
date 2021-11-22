@@ -18,11 +18,17 @@
 set -e
 
 BASE=$(dirname $(readlink -f $0))
+CMD=$1
+if [ -z $2 ]; then
+  MODE="debug"
+else
+  MODE="release"
+fi
 WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 RUST_WASM_TARGET="wasm32-unknown-unknown"
 RUST_CONFIG="gtk-rust/Cargo.toml"
-RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/debug"
+RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/${MODE}"
 
 setup_deps() {
   mkdir -p deps
@@ -87,7 +93,7 @@ build_wasm_c() {
 }
 
 build_gtk_wasm_rust() {
-  cargo build --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
+  cargo build "--${MODE}" --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
 }
 
 build_gtk_wasm_c() {
@@ -112,7 +118,7 @@ run() {
   ./host "$@"
 }
 
-case "$1" in
+case "$CMD" in
   gc) # C-based GTK demo
     setup_deps
     build_gtk_wasm_c
@@ -124,8 +130,8 @@ case "$1" in
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
     build_gtk_wasm_c
-    cargo build --manifest-path "$RUST_CONFIG" --features host
-    cargo run --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
+    cargo build "--${MODE}" --manifest-path "$RUST_CONFIG" --features host
+    cargo run "--${MODE}" --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
     ;;
 
   gcr) # C-based GTK demo with Rust wasm modules
@@ -140,8 +146,8 @@ case "$1" in
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
     setup_deps
     build_gtk_wasm_rust
-    cargo build --manifest-path "$RUST_CONFIG" --features host
-    ./gtk-rust/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
+    cargo build "--${MODE}" --manifest-path "$RUST_CONFIG" --features host
+    ./gtk-rust/target/${MODE}/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
   t) # Terminal-based tests (in C)
@@ -162,7 +168,7 @@ case "$1" in
     ( cd gtk-rust && cargo clean )
     ;;
 
-  *)  echo "Usage: gc | gr | grc | gcr | t | i | clean"
+  *)  echo "Usage: gc | gr | grc | gcr | t | i | clean [r]"
       echo "  gc: GTK demo in C"
       echo "  gr: GTK demo in Rust"
       echo "  grc: GTK demo with Rust host and C wasm modules"
@@ -170,4 +176,5 @@ case "$1" in
       echo "  t: terminal-only tests"
       echo "  i: install dependencies"
       echo "  clean: cleans up build artifacts"
+      echo "  r: use release mode for rust"
 esac
