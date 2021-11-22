@@ -16,22 +16,13 @@
 
 // Imported via `use` in hunter.rs and runner.rs
 
+use super::shared::State;
 use std::sync::{Arc, Mutex};
 
 // Grid setup.
 pub const GRID_W: usize = 50;
 pub const GRID_H: usize = 30;
 pub const N_RUNNERS: usize = 15;
-
-#[allow(non_camel_case_types)]
-pub type cptr = *mut core::ffi::c_void;
-
-#[derive(Eq, PartialEq)]
-pub enum State {
-    Walking,
-    Running,
-    Dead
-}
 
 pub struct Runner {
     pub x: usize,
@@ -118,7 +109,6 @@ pub fn move_by(grid: &GridType, x: &mut usize, y: &mut usize, mx: i32, my: i32) 
         return;
     }
     if grid[ty][tx] == 1 {
-        // TODO: This is a bit cursed
         tx = (*x as i32).saturating_add(rand_step()) as usize;
         ty = (*y as i32).saturating_add(rand_step()) as usize;
         if ty >= grid.len() || tx >= grid[ty].len() || grid[ty][tx] == 1 {

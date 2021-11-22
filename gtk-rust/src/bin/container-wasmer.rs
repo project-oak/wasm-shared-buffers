@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-use common::*;
+use common::host_common::{Buffers, Comms, Signal};
 use std::{env, fs, io::prelude::*, process};
 use wasmer_runtime::{Array, Ctx, func, Func, imports, Instance, instantiate, Memory, WasmPtr};
 

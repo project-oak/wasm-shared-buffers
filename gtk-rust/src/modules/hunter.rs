@@ -14,8 +14,8 @@
 // limitations under the License.
 //
 
-mod module_common;
-use module_common::*;
+use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter};
+use common::shared::{cptr, State};
 
 #[no_mangle]
 pub extern fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32) {
