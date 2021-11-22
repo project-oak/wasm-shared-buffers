@@ -152,9 +152,16 @@ static FuncResult fn_call(int index, ...) {
 }
 
 static wasm_trap_t *print_callback(const wasm_val_vec_t *args, wasm_val_vec_t *results) {
-  // Single arg should be a pointer to a string in wasm's linear memory.
-  assert(args->size == 1 && args->data[0].kind == WASM_I32);
-  printf("%s", wasm_memory_data(wc.memory) + args->data[0].of.i32);
+  // args: int len, const char* msg
+  assert(args->size == 2);
+  assert(args->data[0].kind == WASM_I32);
+  assert(args->data[1].kind == WASM_I32);
+
+  // With the C implementation, 'msg' string should be null-terminated.
+  char *wasm_memory_base = wasm_memory_data(wc.memory);
+  assert(*(wasm_memory_base + args->data[0].of.i32) == 0);
+
+  printf("%s", wasm_memory_data(wc.memory) + args->data[1].of.i32);
   return NULL;
 }
 
@@ -232,12 +239,12 @@ static bool init_module() {
   return true;
 }
 
-static bool init_shared_bufs() {
+static bool map_shared_bufs() {
   // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
   int page_size = sysconf(_SC_PAGESIZE);
   int wasm_alloc_size = wc.ro_size + wc.rw_size + 3 * page_size;
-  FuncResult malloc_res = fn_call(FN_MALLOC, wasm_alloc_size);
-  if (!malloc_res.ok) {
+  FuncResult wasm_alloc_res = fn_call(FN_MALLOC, wasm_alloc_size);
+  if (!wasm_alloc_res.ok) {
     return false;
   }
 
@@ -245,14 +252,14 @@ static bool init_shared_bufs() {
   void *wasm_memory_base = wasm_memory_data(wc.memory);
 
   // Convert the reserve alloc's linear address to our address space.
-  void *wasm_alloc_ptr = wasm_memory_base + malloc_res.val;
+  void *wasm_alloc_ptr = wasm_memory_base + wasm_alloc_res.val;
 
   // Align the shared buffers inside wasm's linear memory against our page boundaries.
-  void *aligned_ro = page_align(wasm_alloc_ptr, page_size);
-  void *aligned_rw = page_align(aligned_ro + wc.ro_size, page_size);
+  void *aligned_ro_ptr = page_align(wasm_alloc_ptr, page_size);
+  void *aligned_rw_ptr = page_align(aligned_ro_ptr + wc.ro_size, page_size);
 
   // Verify that our overall mmapped size will be safely contained in the wasm allocation.
-  void *end = page_align(aligned_rw + wc.rw_size, page_size);
+  void *end = page_align(aligned_rw_ptr + wc.rw_size, page_size);
   assert(end - wasm_alloc_ptr <= wasm_alloc_size);
 
   // Map read-only buffer.
@@ -261,16 +268,16 @@ static bool init_shared_bufs() {
   if (ro_fd == -1) {
     return error("Error calling shm_open");
   }
-  wc.ro_buf = mmap(aligned_ro, wc.ro_size, PROT_READ, flags, ro_fd, 0);
-  assert(wc.ro_buf == aligned_ro);
+  wc.ro_buf = mmap(aligned_ro_ptr, wc.ro_size, PROT_READ, flags, ro_fd, 0);
+  assert(wc.ro_buf == aligned_ro_ptr);
 
   // Map read-write buffer.
   int rw_fd = shm_open(wc.rw_name, O_RDWR, S_IRUSR | S_IWUSR);
   if (rw_fd == -1) {
     return error("Error calling shm_open");
   }
-  wc.rw_buf = mmap(aligned_rw, wc.rw_size, PROT_READ | PROT_WRITE, flags, rw_fd, 0);
-  assert(wc.rw_buf == aligned_rw);
+  wc.rw_buf = mmap(aligned_rw_ptr, wc.rw_size, PROT_READ | PROT_WRITE, flags, rw_fd, 0);
+  assert(wc.rw_buf == aligned_rw_ptr);
 
   // We don't need the file descriptors once the buffers have been mapped.
   assert(close(rw_fd) != -1 && close(ro_fd) != -1);
@@ -278,9 +285,9 @@ static bool init_shared_bufs() {
   info("  read-write buffer: %p", wc.rw_buf);
 
   // Inform the wasm module of the aligned shared buffer location in linear memory.
-  int shift_ro = (void *)wc.ro_buf - wasm_memory_base;
-  int shift_rw = (void *)wc.rw_buf - wasm_memory_base;
-  return fn_call(FN_SET_SHARED, shift_ro, wc.ro_size, shift_rw, wc.rw_size).ok;
+  int ro_index = (void *)wc.ro_buf - wasm_memory_base;
+  int rw_index = (void *)wc.rw_buf - wasm_memory_base;
+  return fn_call(FN_SET_SHARED, ro_index, wc.ro_size, rw_index, wc.rw_size).ok;
 }
 
 static void destroy() {
@@ -356,7 +363,7 @@ int main(int argc, const char *argv[]) {
   wc.rw_size = atoi(argv[7]);
 
   info("Container started; module '%s', pid %d", wc.module_name, getpid());
-  if (init_module() && init_shared_bufs()) {
+  if (init_module() && map_shared_bufs()) {
     send(CMD_READY);
     command_loop();
   }

@@ -23,7 +23,7 @@
 #define SCARE_DIST  10
 
 #define SCALE       20
-#define TICK_MS     200
+#define TICK_MS     150
 
 typedef enum {
   WALKING,

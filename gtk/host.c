@@ -50,7 +50,7 @@ Context ctx = { 0 };
 
 static void *create_shared_buffer(const char *name, int size) {
   // shm_open() creates the actual memory buffer for sharing.
-  int fd = shm_open(name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  int fd = shm_open(name, O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd != -1);
   assert(ftruncate(fd, size) != -1);
 
@@ -226,6 +226,7 @@ static void app_close(GtkWidget *button, gpointer data) {
 
 static void on_activate(GtkApplication *app, gpointer data) {
   GtkWidget *window = gtk_application_window_new(app);
+  gtk_window_set_title(GTK_WINDOW(window), "WebAssembly shared buffers [C]");
 
   GtkWidget *drawing_area = gtk_drawing_area_new();
   gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(drawing_area), GRID_W * SCALE);

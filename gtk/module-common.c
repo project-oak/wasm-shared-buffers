@@ -16,23 +16,21 @@
 
 // Inlined via #include in hunter.c and runner.c
 
-EM_JS(void, print_callback, (const char* msg), {})
-extern void print_callback(const char* msg);
+EM_JS(void, print_callback, (int, const char* msg), {})
+extern void print_callback(int len, const char* msg);
 
 EMSCRIPTEN_KEEPALIVE
 void print(const char *fmt, ...) {
   char msg[500];
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(msg, 500, fmt, ap);
+  int len = vsnprintf(msg, 500, fmt, ap);
   va_end(ap);
-  print_callback(msg);
+  print_callback(len, msg);
 }
 
-const int dirs[3] = { -1, 0, 1 };
-
-int rand_dir() {
-  return dirs[rand() % 3];
+int rand_step() {
+  return (rand() % 3) - 1;
 }
 
 void move(int *x, int *y, int mx, int my) {
@@ -40,8 +38,8 @@ void move(int *x, int *y, int mx, int my) {
   int tx = *x + mx;
   int ty = *y + my;
   if (grid[ty][tx] == 1) {
-    tx = *x + rand_dir();
-    ty = *y + rand_dir();
+    tx = *x + rand_step();
+    ty = *y + rand_step();
     if (grid[ty][tx] == 1) {
       return;
     }

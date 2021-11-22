@@ -39,6 +39,7 @@ void init(int rand_seed) {
   for (int i = 0; i < N_RUNNERS; i++) {
     runners[i].x = 1 + rand() % (GRID_W - 2);
     runners[i].y = 1 + rand() % (GRID_H - 2);
+    runners[i].state = WALKING;
   }
 }
 
@@ -60,18 +61,18 @@ void tick() {
     if (dist > SCARE_DIST * SCARE_DIST) {
       // Hunter is too far away; random walk.
       r->state = WALKING;
-      mx = rand_dir();
-      my = rand_dir();
+      mx = rand_step();
+      my = rand_step();
     } else {
       // Run! ..but with some randomness.
       r->state = RUNNING;
       switch (rand() % 3) {
         case 0:
           mx = step(dx);
-          my = rand_dir();
+          my = rand_step();
           break;
         case 1:
-          mx = rand_dir();
+          mx = rand_step();
           my = step(dy);
           break;
         case 2:
