@@ -65,6 +65,14 @@ build_wasm() {
   done
 }
 
+build_gtk_wasm() {
+  cd gtk-c
+  for W in hunter runner; do
+    build_wasm $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
+  done
+  cd ..
+}
+
 build_container() {
   echo "Building container"
   gcc container.c -o container -I$WAMR/core/iwasm/include -L$WAMR/build -lvmlib -lm -lpthread -lrt
@@ -82,19 +90,25 @@ run() {
 }
 
 case "$1" in
-  g | gtk)
+  gc) # C-based GTK demo
     setup_deps
     check_gtk4
-    cd gtk
-    for W in hunter runner; do
-      build_wasm $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
-    done
+    build_gtk_wasm
+    cd gtk-c
     build_container
     build_host $(pkg-config --cflags --libs gtk4)
     run
     ;;
 
-  t | terminal)
+  gr) # Rust-based GTK demo; uses wasm modules from gtk-c
+    build_gtk_wasm
+    cp -uv gtk-c/{hunter.wasm,runner.wasm} gtk-rust/
+    cd gtk-rust
+    cargo build
+    cargo run
+    ;;
+
+  t) # Terminal-based tests (in C)
     setup_deps
     cd terminal
     build_wasm module "-s TOTAL_MEMORY=64KB -s TOTAL_STACK=1KB"
@@ -103,9 +117,12 @@ case "$1" in
     run
     ;;
 
-  c | clean)
-    rm -vf {gtk,terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
+  clean)
+    rm -vf {gtk-*,terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
     ;;
 
-  *) echo "Usage: g[tk] | t[erminal] | c[lean]"
+  *)  echo "Usage: gc | gr | t | clean"
+      echo "  gc: GTK demo in C"
+      echo "  gr: GTK demo in Rust"
+      echo "  t: terminal-only tests"
 esac

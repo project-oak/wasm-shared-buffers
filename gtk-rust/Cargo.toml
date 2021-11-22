@@ -1,0 +1,18 @@
+[package]
+name = "host"
+version = "0.1.0"
+edition = "2018"
+default-run = "host"
+
+[dependencies]
+exec = "*"
+fork = "*"
+glib = "*"
+gtk = { version = "*", package = "gtk4" }
+libc = "*"
+rand = "*"
+wasmi = "*"
+
+[lib]
+name = "common"
+path = "src/common.rs"
