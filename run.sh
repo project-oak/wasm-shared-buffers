@@ -66,6 +66,7 @@ build_wasm() {
 }
 
 build_gtk_wasm() {
+  check_gtk4
   cd gtk-c
   for W in hunter runner; do
     build_wasm $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
@@ -92,7 +93,6 @@ run() {
 case "$1" in
   gc) # C-based GTK demo
     setup_deps
-    check_gtk4
     build_gtk_wasm
     cd gtk-c
     build_container
@@ -100,9 +100,32 @@ case "$1" in
     run
     ;;
 
-  gr) # Rust-based GTK demo; uses wasm modules from gtk-c
+  grc) # Rust-based GTK demo; uses wasm modules from gtk-c
+    (
+      cd gtk-rust && \
+        cargo build
+    )
     build_gtk_wasm
     cp -uv gtk-c/{hunter.wasm,runner.wasm} gtk-rust/
+    (
+      cd gtk-rust && \
+        cargo run
+    )
+    ;;
+
+  gcr) # C-based GTK demo with Rust wasm modules
+    setup_deps
+    (
+      cd gtk-rust
+      cargo build
+    )
+    cp -uv gtk-rust/{hunter.wasm,runner.wasm} gtk-c/
+    cd gtk-c
+    build_host $(pkg-config --cflags --libs gtk4)
+    run
+    ;;
+
+  gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
     cd gtk-rust
     cargo build
     cargo run
@@ -124,5 +147,7 @@ case "$1" in
   *)  echo "Usage: gc | gr | t | clean"
       echo "  gc: GTK demo in C"
       echo "  gr: GTK demo in Rust"
+      echo "  grc: GTK demo with Rust host and C wasm modules"
+      echo "  gcr: GTK demo with C host and Rust wasm modules"
       echo "  t: terminal-only tests"
 esac
