@@ -2,3 +2,4 @@ deps
 */*.wasm
 */container
 */host
+*/target

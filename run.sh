@@ -108,13 +108,13 @@ case "$1" in
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
     (
-      cd gtk-rust && \
+      cd gtk-rust-host && \
         cargo build
     )
     build_gtk_wasm
-    cp -uv gtk-c/{hunter.wasm,runner.wasm} gtk-rust/
+    cp -uv gtk-c/{hunter.wasm,runner.wasm} gtk-rust-host/
     (
-      cd gtk-rust && \
+      cd gtk-rust-host && \
         cargo run
     )
     ;;
@@ -122,18 +122,18 @@ case "$1" in
   gcr) # C-based GTK demo with Rust wasm modules
     setup_deps
     (
-      cd gtk-rust
+      cd gtk-rus-hostt
       cargo build
     )
-    cp -uv gtk-rust/{hunter.wasm,runner.wasm} gtk-c/
+    cp -uv gtk-rust-host/{hunter.wasm,runner.wasm} gtk-c/
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
     run
     ;;
 
-  gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
+  gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
-    cd gtk-rust
+    cd gtk-rust-host
     cargo build
     cargo run
     ;;
