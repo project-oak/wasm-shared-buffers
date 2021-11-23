@@ -46,6 +46,11 @@ setup_deps() {
   cd ..
 }
 
+get_rust_tooling() {
+  echo "-- Installing (extra) rust tooling for wasm --"
+  cargo install cargo-wasi
+}
+
 check_gtk4() {
   if ! pkg-config --validate gtk4 &>/dev/null; then
     echo "gtk4 dev libraries are required: please run 'sudo apt-get install libgtk-4-dev'"
@@ -53,7 +58,7 @@ check_gtk4() {
   fi
 }
 
-build_wasm() {
+build_wasm_c() {
   local F NAME=$1 FLAGS="$2"
   for F in $NAME.c "${@:3}"; do
     if [ $F -nt $NAME.wasm ]; then
@@ -65,15 +70,20 @@ build_wasm() {
   done
 }
 
-build_gtk_wasm() {
+build_wasm_rust() {
+  # From go/rust+wasm
+  cargo wasi build -Zmultitarget --release --target wasm32-unknown-unknown --bin hunter
+  #cargo wasi build -Zmultitarget --release --target wasm32-unknown-unknown --bin runner
+}
+
+build_gtk_wasm_c() {
   check_gtk4
   cd gtk-c
   for W in hunter runner; do
-    build_wasm $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
+    build_wasm_c $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
   done
   cd ..
 }
-
 build_container() {
   echo "Building container"
   gcc container.c -o container -I$WAMR/core/iwasm/include -L$WAMR/build -lvmlib -lm -lpthread -lrt
@@ -96,7 +106,7 @@ RUST_MODULES="gtk-rust-modules/Cargo.toml"
 case "$1" in
   gc) # C-based GTK demo
     setup_deps
-    build_gtk_wasm
+    build_gtk_wasm_c
     cd gtk-c
     build_container
     build_host $(pkg-config --cflags --libs gtk4)
@@ -105,7 +115,7 @@ case "$1" in
 
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
-    build_gtk_wasm
+    build_gtk_wasm_c
     cargo build --manifest-path "$RUST_HOST"
     cargo run --manifest-path "$RUST_HOST" gtk-c/hunter.wasm gtk-c/runner.wasm
     ;;
@@ -113,6 +123,7 @@ case "$1" in
   gcr) # C-based GTK demo with Rust wasm modules
     setup_deps
     cargo build --manifest-path "$RUST_MODULES"
+    # TODO: build_wasm_rust
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
     run ../gtk-rust-modules/hunter.wasm ../gtk-rust-modules/runner.wasm
@@ -121,6 +132,7 @@ case "$1" in
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
     cargo build --manifest-path "$RUST_MODULES"
+    # TODO build_wasm_rust
     cargo build --manifest-path "$RUST_HOST"
     cargo run --manifest-path "$RUST_HOST" gtk-rust/hunter.wasm gtk-rust/runner.wasm
     ;;
@@ -128,10 +140,15 @@ case "$1" in
   t) # Terminal-based tests (in C)
     setup_deps
     cd terminal
-    build_wasm module "-s TOTAL_MEMORY=64KB -s TOTAL_STACK=1KB"
+    build_wasm_c module "-s TOTAL_MEMORY=64KB -s TOTAL_STACK=1KB"
     build_container
     build_host
     run
+    ;;
+
+  i) # Install any deps needed
+    setup_deps
+    get_rust_tooling
     ;;
 
   clean)
@@ -144,4 +161,5 @@ case "$1" in
       echo "  grc: GTK demo with Rust host and C wasm modules"
       echo "  gcr: GTK demo with C host and Rust wasm modules"
       echo "  t: terminal-only tests"
+      echo "  i: install dependencies"
 esac
