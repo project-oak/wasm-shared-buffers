@@ -22,7 +22,6 @@ WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 
 setup_deps() {
-  clean_all_wasm
   mkdir -p deps
   cd deps
   if [ ! -d wasm-micro-runtime ]; then
@@ -52,10 +51,6 @@ check_gtk4() {
     echo "gtk4 dev libraries are required: please run 'sudo apt-get install libgtk-4-dev'"
     exit 1
   fi
-}
-
-clean_all_wasm() {
-    rm -f hunter.wasm runner.wasm # Clean out the 'local' wasm modules to avoid accidents
 }
 
 build_wasm() {
@@ -99,36 +94,32 @@ case "$1" in
   gc) # C-based GTK demo
     setup_deps
     build_gtk_wasm
-    cp -uv gtk-c/{hunter.wasm,runner.wasm} .
     cd gtk-c
     build_container
     build_host $(pkg-config --cflags --libs gtk4)
-    run
+    run hunter.wasm runner.wasm
     ;;
 
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
     cargo build --manifest-path gtk-rust-host/Cargo.toml
     build_gtk_wasm
-    cp -uv gtk-c/{hunter.wasm,runner.wasm} .
-    cargo run --manifest-path gtk-rust-host/Cargo.toml
+    cargo run --manifest-path gtk-rust-host/Cargo.toml gtk-c/hunter.wasm gtk-c/runner.wasm
     ;;
 
   gcr) # C-based GTK demo with Rust wasm modules
     setup_deps
     cargo build --manifest-path gtk-rust-modules/Cargo.toml
-    cp -uv gtk-rust-modules/{hunter.wasm,runner.wasm} .
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
-    run
+    run ../gtk-rust-modules/hunter.wasm ../gtk-rust-modules/runner.wasm
     ;;
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
     cargo build --manifest-path gtk-rust-modules/Cargo.toml
-    cp -uv gtk-rust-modules/{hunter.wasm,runner.wasm} .
     cargo build --manifest-path gtk-rust-host/Cargo.toml
-    cargo run --manifest-path gtk-rust-host/Cargo.toml
+    cargo run --manifest-path gtk-rust-host/Cargo.toml gtk-rust/hunter.wasm gtk-rust/runner.wasm
     ;;
 
   t) # Terminal-based tests (in C)

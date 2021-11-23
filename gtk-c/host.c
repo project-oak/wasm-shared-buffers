@@ -273,12 +273,16 @@ int main(int argc, char *argv[]) {
 
   srand(time(NULL));
   init_grid();
-  fork_container(&ctx.pipes[0], "hunter.wasm");
-  fork_container(&ctx.pipes[1], "runner.wasm");
+  if (argc <= 2) {
+    printf("usage: host hunter.wasm runner.wasm");
+  }
+  fork_container(&ctx.pipes[0], argv[1]); // Path to hunter.wasm
+  fork_container(&ctx.pipes[1], argv[2]); // Path to runner.wasm
   assert(send(CMD_INIT));
 
-  GtkApplication *app = gtk_application_new(NULL, G_APPLICATION_FLAGS_NONE);
+  GtkApplication *app = gtk_application_new(NULL, G_APPLICATION_HANDLES_OPEN);
   g_signal_connect(app, "activate", G_CALLBACK(on_activate), &ctx);
+  g_signal_connect(app, "open", G_CALLBACK(on_activate), &ctx);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), &ctx);
   return g_application_run(G_APPLICATION(app), argc, argv);
 }

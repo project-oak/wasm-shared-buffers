@@ -25,7 +25,7 @@ fn main() {
 
     // Load and instantiate the wasm module.
     let mut bytes = Vec::new();
-    fs::File::open(module_name).unwrap().read_to_end(&mut bytes).unwrap();
+    fs::File::open(&module_name).expect(&format!("Couldn't open module {}", module_name)).read_to_end(&mut bytes).unwrap();
     let module = wasmi::Module::from_buffer(&bytes).expect("failed to load wasm");
 
     let mut ctx = Context::new();
