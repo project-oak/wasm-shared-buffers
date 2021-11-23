@@ -55,7 +55,7 @@ check_gtk4() {
 }
 
 clean_all_wasm() {
-    rm -f gtk-*/{hunter.wasm,runner.wasm} # Clean out the wasm modules to avoid accidents
+    rm -f hunter.wasm runner.wasm # Clean out the 'local' wasm modules to avoid accidents
 }
 
 build_wasm() {
@@ -99,6 +99,7 @@ case "$1" in
   gc) # C-based GTK demo
     setup_deps
     build_gtk_wasm
+    cp -uv gtk-c/{hunter.wasm,runner.wasm} .
     cd gtk-c
     build_container
     build_host $(pkg-config --cflags --libs gtk4)
@@ -107,25 +108,16 @@ case "$1" in
 
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
-    (
-      cd gtk-rust-host && \
-        cargo build
-    )
+    cargo build --manifest-path gtk-rust-host/Cargo.toml
     build_gtk_wasm
-    cp -uv gtk-c/{hunter.wasm,runner.wasm} gtk-rust-host/
-    (
-      cd gtk-rust-host && \
-        cargo run
-    )
+    cp -uv gtk-c/{hunter.wasm,runner.wasm} .
+    cargo run --manifest-path gtk-rust-host/Cargo.toml
     ;;
 
   gcr) # C-based GTK demo with Rust wasm modules
     setup_deps
-    (
-      cd gtk-rus-hostt
-      cargo build
-    )
-    cp -uv gtk-rust-host/{hunter.wasm,runner.wasm} gtk-c/
+    cargo build --manifest-path gtk-rust-modules/Cargo.toml
+    cp -uv gtk-rust-modules/{hunter.wasm,runner.wasm} .
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
     run
@@ -133,9 +125,10 @@ case "$1" in
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
-    cd gtk-rust-host
-    cargo build
-    cargo run
+    cargo build --manifest-path gtk-rust-modules/Cargo.toml
+    cp -uv gtk-rust-modules/{hunter.wasm,runner.wasm} .
+    cargo build --manifest-path gtk-rust-host/Cargo.toml
+    cargo run --manifest-path gtk-rust-host/Cargo.toml
     ;;
 
   t) # Terminal-based tests (in C)
