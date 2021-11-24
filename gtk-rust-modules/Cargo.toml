@@ -7,10 +7,7 @@ edition = "2021"
 
 [dependencies]
 lazy_static = "1.4.0"
-
-[lib]
-name = "module_common"
-path = "src/module_common.rs"
+rand = "0.8.0"
 
 [[bin]]
 name = "runner"
