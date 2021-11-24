@@ -93,9 +93,9 @@ build_gtk_wasm_rust() {
   # TODO: Remove this once cargo-wasi supports --manifest-path
   (
     cd gtk-rust-modules
-  # From go/rust+wasm
+    # From go/rust+wasm
     cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin hunter # --manifest-path "$RUST_MODULES"
-    # cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin runner # --manifest-path "$RUST_MODULES"
+    cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin runner # --manifest-path "$RUST_MODULES"
   )
 }
 
@@ -146,14 +146,14 @@ case "$1" in
     build_gtk_wasm_rust
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
-    run "../${RUST_MODULES_OUT}/hunter.wasm" "../${RUST_MODULES_OUT}/hunter.wasm"
+    run "../${RUST_MODULES_OUT}/hunter.wasm" "../${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
     build_gtk_wasm_rust
     cargo build --manifest-path "$RUST_HOST"
-    ./gtk-rust-host/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/hunter.wasm"
+    ./gtk-rust-host/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
   t) # Terminal-based tests (in C)
