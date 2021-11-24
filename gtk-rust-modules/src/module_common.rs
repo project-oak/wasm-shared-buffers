@@ -69,10 +69,22 @@ pub fn move_by(grid: &GridType, x: &mut usize, y: &mut usize, mx: i32, my: i32) 
   // if that's also blocked just stay still.
   let mut tx: usize = (*x as i32).saturating_add(mx) as usize;
   let mut ty: usize = (*y as i32).saturating_add(my) as usize;
+  if ty >= grid.len() {
+    return;
+  }
+  if tx >= grid[ty].len() {
+    return;
+  }
   if grid[ty][tx] == 1 {
     // TODO: This is a bit cursed
     tx = (*x as i32).saturating_add(rand_step()) as usize;
     ty = (*y as i32).saturating_add(rand_step()) as usize;
+    if ty >= grid.len() {
+      return;
+    }
+    if tx >= grid[ty].len() {
+      return;
+    }
     if grid[ty][tx] == 1 {
       return;
     }
