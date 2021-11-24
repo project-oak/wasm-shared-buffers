@@ -89,7 +89,7 @@ build_wasm_c() {
   done
 }
 
-build_wasm_rust() {
+build_gtk_wasm_rust() {
   # TODO: Remove this once cargo-wasi supports --manifest-path
   (
     cd gtk-rust-modules
@@ -107,12 +107,10 @@ build_gtk_wasm_c() {
   done
   cd ..
 }
-build_container() {
-  echo "Building container"
-  gcc container.c -o container -I$WAMR/core/iwasm/include -L$WAMR/build -lvmlib -lm -lpthread -lrt
-}
 
 build_host() {
+  echo "Building container"
+  gcc container.c -o container -I$WAMR/core/iwasm/include -L$WAMR/build -lvmlib -lm -lpthread -lrt
   echo "Building host"
   gcc $1 host.c -o host "$@" -lrt
 }
@@ -132,7 +130,6 @@ case "$1" in
     setup_deps
     build_gtk_wasm_c
     cd gtk-c
-    build_container
     build_host $(pkg-config --cflags --libs gtk4)
     run hunter.wasm runner.wasm
     ;;
@@ -146,8 +143,7 @@ case "$1" in
 
   gcr) # C-based GTK demo with Rust wasm modules
     setup_deps
-    cargo build --manifest-path "$RUST_MODULES"
-    # TODO: build_wasm_rust
+    build_gtk_wasm_rust
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
     run "../${RUST_MODULES_OUT}/hunter.wasm" "../${RUST_MODULES_OUT}/hunter.wasm"
@@ -155,8 +151,7 @@ case "$1" in
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
-    build_wasm_rust
-    # TODO build_wasm_rust
+    build_gtk_wasm_rust
     cargo build --manifest-path "$RUST_HOST"
     ./gtk-rust-host/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/hunter.wasm"
     ;;
@@ -165,7 +160,6 @@ case "$1" in
     setup_deps
     cd terminal
     build_wasm_c module "-s TOTAL_MEMORY=64KB -s TOTAL_STACK=1KB"
-    build_container
     build_host
     run
     ;;
