@@ -12,6 +12,7 @@ gtk = { version = "*", package = "gtk4" }
 libc = "*"
 rand = "*"
 wasmi = "*"
+wasmer-runtime = "*"
 
 [lib]
 name = "common"

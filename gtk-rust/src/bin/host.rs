@@ -50,8 +50,8 @@ impl HostContext<'_> {
     fn new() -> Self {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
-        fork_container("hunter.wasm", HUNTER_SIGNAL_INDEX);
-        fork_container("runner.wasm", RUNNER_SIGNAL_INDEX);
+        fork_container("container-wasmer", "hunter.wasm", HUNTER_SIGNAL_INDEX);
+        fork_container("container-wasmi", "runner.wasm", RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
         let mut ctx = Self {
@@ -116,11 +116,12 @@ fn create_shared_buffer(name: &str, size: i32) -> cptr {
     }
 }
 
-fn fork_container(module: &str, signal_index: usize) {
+fn fork_container(binary: &str, module: &str, signal_index: usize) {
     match fork() {
         Ok(Fork::Parent(_)) => (),
         Ok(Fork::Child) => {
-            let err = exec::execvp("target/debug/container", &["container", module, &signal_index.to_string()]);
+            let cmd = String::from("target/debug/") + binary;
+            let err = exec::execvp(cmd, &[binary, module, &signal_index.to_string()]);
             panic!("exec failed: {}", err); // should not be reached
         }
         Err(_) => panic!("fork failed"),
