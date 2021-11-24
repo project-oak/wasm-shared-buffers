@@ -90,7 +90,7 @@ impl Context {
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
         let wasm_alloc_size = READ_ONLY_BUF_SIZE + READ_WRITE_BUF_SIZE + 3 * page_size as i32;
 
-        let wasm_alloc_res = instance.invoke_export("malloc", &[I32(wasm_alloc_size)], self)
+        let wasm_alloc_res = instance.invoke_export("malloc_", &[I32(wasm_alloc_size)], self)
             .expect("malloc failed")
             .expect("no value returned from malloc");
 

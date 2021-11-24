@@ -16,7 +16,7 @@
 
 // Imported via `use` in hunter.rs and runner.rs
 
-use rand::{Rng, prelude::ThreadRng};
+// use rand::{Rng, prelude::ThreadRng};
 use crate::common::*;
 use std::sync::{Arc, Mutex};
 
@@ -53,22 +53,21 @@ lazy_static! {
 pub fn rand_step() -> i32 {
   // let guard = CTX.lock().expect("Failed to aquire ctx lock");
   // let ctx = *guard.as_ref().expect("ctx not initialized");
-  let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
-  return (rng.gen::<i32>() % 3) - 1;
+  // let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
+  // return (rng.gen::<i32>() % 3) - 1;
+  return 1;
 }
 
-pub fn move_by(x: &mut usize, y: &mut usize, mx: i32, my: i32) {
-  let guard = CTX.lock().expect("Failed to aquire ctx lock");
-  let ctx = &*guard.as_ref().expect("ctx not initialized");
+pub fn move_by(grid: &GridType, x: &mut usize, y: &mut usize, mx: i32, my: i32) {
   // If the dest cell is blocked, try a random move;
   // if that's also blocked just stay still.
   let mut tx: usize = (*x as i64).wrapping_add(mx as i64) as usize;
   let mut ty: usize = (*y as i64).wrapping_add(my as i64) as usize;
-  if (*ctx.grid)[ty][tx] == 1 {
+  if grid[ty][tx] == 1 {
     // TODO: This is a bit cursed
     tx = (*x as i64).checked_add(rand_step() as i64).expect("Overflow on x!?") as usize;
     ty = (*y as i64).checked_add(rand_step() as i64).expect("Overflow on y!?") as usize;
-    if (*ctx.grid)[ty][tx] == 1 {
+    if grid[ty][tx] == 1 {
       return;
     }
   }

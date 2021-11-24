@@ -21,6 +21,8 @@ BASE=$(dirname $(readlink -f $0))
 WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 
+RUST_WASM_TARGET="wasm32-unknown-unknown"
+
 setup_deps() {
   mkdir -p deps
   cd deps
@@ -47,8 +49,25 @@ setup_deps() {
 }
 
 get_rust_tooling() {
-  echo "-- Installing (extra) rust tooling for wasm --"
+  if ! rustup -V &>/dev/null; then
+    echo "Installing Rustup"
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    source ~/.cargo/env
+  fi
+
+  echo "Ensuring we have the latest rust tool chains"
+  rustup toolchain install nightly
+  echo "Set nightly as default"
+  rustup default nightly
+
+  echo "Installing Wasm target for Rust"
+  # rustup target add wasm32-wasi
+  rustup target add "$RUST_WASM_TARGET"
+
+  echo "Installing Wasm support for Cargo"
   cargo install cargo-wasi
+
+  echo "Done"
 }
 
 check_gtk4() {
@@ -71,9 +90,13 @@ build_wasm_c() {
 }
 
 build_wasm_rust() {
+  # TODO: Remove this once cargo-wasi supports --manifest-path
+  (
+    cd gtk-rust-modules
   # From go/rust+wasm
-  cargo wasi build -Zmultitarget --release --target wasm32-unknown-unknown --bin hunter
-  #cargo wasi build -Zmultitarget --release --target wasm32-unknown-unknown --bin runner
+    cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin hunter # --manifest-path "$RUST_MODULES"
+    # cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin runner # --manifest-path "$RUST_MODULES"
+  )
 }
 
 build_gtk_wasm_c() {
@@ -102,6 +125,7 @@ run() {
 
 RUST_HOST="gtk-rust-host/Cargo.toml"
 RUST_MODULES="gtk-rust-modules/Cargo.toml"
+RUST_MODULES_OUT="gtk-rust-modules/target/${RUST_WASM_TARGET}/release"
 
 case "$1" in
   gc) # C-based GTK demo
@@ -126,15 +150,15 @@ case "$1" in
     # TODO: build_wasm_rust
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
-    run ../gtk-rust-modules/hunter.wasm ../gtk-rust-modules/runner.wasm
+    run "../${RUST_MODULES_OUT}/hunter.wasm" "../${RUST_MODULES_OUT}/hunter.wasm"
     ;;
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
     setup_deps
-    cargo build --manifest-path "$RUST_MODULES"
+    build_wasm_rust
     # TODO build_wasm_rust
     cargo build --manifest-path "$RUST_HOST"
-    cargo run --manifest-path "$RUST_HOST" gtk-rust/hunter.wasm gtk-rust/runner.wasm
+    ./gtk-rust-host/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/hunter.wasm"
     ;;
 
   t) # Terminal-based tests (in C)
@@ -153,13 +177,16 @@ case "$1" in
 
   clean)
     rm -vf {gtk-*,terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
+    cargo clean --manifest-path "$RUST_HOST"
+    cargo clean --manifest-path "$RUST_MODULES"
     ;;
 
-  *)  echo "Usage: gc | gr | t | clean"
+  *)  echo "Usage: gc | gr | grc | gcr | t | i | clean"
       echo "  gc: GTK demo in C"
       echo "  gr: GTK demo in Rust"
       echo "  grc: GTK demo with Rust host and C wasm modules"
       echo "  gcr: GTK demo with C host and Rust wasm modules"
       echo "  t: terminal-only tests"
       echo "  i: install dependencies"
+      echo "  clean: cleans up build artifacts"
 esac
