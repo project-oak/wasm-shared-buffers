@@ -69,11 +69,35 @@ pub struct Buffers {
 }
 
 impl Buffers {
-    pub fn new(aligned_ro_ptr: i64, aligned_rw_ptr: i64) -> Self {
-        Buffers {
-            shared_ro: Self::map_buffer(aligned_ro_ptr, READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE, true),
-            shared_rw: Self::map_buffer(aligned_rw_ptr, READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE, false),
-        }
+    // Set up the shared buffers, given the host address space of the wasm linear memory
+    // and access to the 'malloc' and 'set_shared' functions exported by the wasm modules.
+    pub fn new<M, S>(wasm_memory_base: i64, malloc: M, set_shared: S) -> Self
+    where
+        M: Fn(i32) -> i32,
+        S: Fn(i32, i32, i32, i32),
+    {
+        // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        let wasm_alloc_index = malloc(READ_ONLY_BUF_SIZE + READ_WRITE_BUF_SIZE + 3 * page_size as i32);
+
+        // Get the location of wasm's linear memory buffer in our address space.
+        let wasm_alloc_ptr = wasm_memory_base + wasm_alloc_index as i64;
+
+        // Align the shared buffers inside wasm's linear memory against our page boundaries.
+        let aligned_ro_ptr = page_align(wasm_alloc_ptr, page_size);
+        let aligned_rw_ptr = page_align(aligned_ro_ptr + READ_ONLY_BUF_SIZE as i64, page_size);
+
+        // Map the buffers into the aligned locations.
+        let shared_ro = Self::map_buffer(aligned_ro_ptr, READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE, true);
+        let shared_rw = Self::map_buffer(aligned_rw_ptr, READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE, false);
+
+        // Convert the aligned buffer locations into wasm linear memory indexes.
+        // We want to skip the signal bytes when passing the r/w buffer into the wasm instance.
+        let ro_index = (shared_ro as i64 - wasm_memory_base) as i32;
+        let rw_index = (shared_rw as i64 - wasm_memory_base) as i32 + SIGNAL_BYTES;
+        set_shared(ro_index, READ_ONLY_BUF_SIZE, rw_index, READ_WRITE_BUF_SIZE - SIGNAL_BYTES);
+
+        Self { shared_ro, shared_rw }
     }
 
     // Uses the libc POSIX API to map in a shared memory buffer.

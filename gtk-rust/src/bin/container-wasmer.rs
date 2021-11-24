@@ -29,7 +29,7 @@ fn main() {
     let import_object = imports! {
         "env" => {
             "print_callback" => func!(|ctx: &mut Ctx, len: u32, msg: WasmPtr<u8, Array>| {
-                println!("{}", msg.get_utf8_string(ctx.memory(0), len).unwrap());
+                print!("{}", msg.get_utf8_string(ctx.memory(0), len).unwrap());
             })
         }
     };
@@ -59,33 +59,18 @@ fn main() {
 }
 
 fn map_shared_buffers(instance: &Instance) -> Buffers {
-    // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    let wasm_alloc_size = READ_ONLY_BUF_SIZE + READ_WRITE_BUF_SIZE + 3 * page_size as i32;
-
-    let malloc: Func<i32, i32> = instance.exports.get("malloc").unwrap();
-    let wasm_alloc_index = malloc.call(wasm_alloc_size).expect("malloc failed");
-
-    // Get the location of wasm's linear memory buffer in our address space.
     let memory: Memory =  instance.exports.get("memory").unwrap();
     let wasm_memory_base = memory.view::<u8>().as_ptr() as i64;
-    let wasm_alloc_ptr = wasm_memory_base + wasm_alloc_index as i64;
 
-    // Align the shared buffers inside wasm's linear memory against our page boundaries.
-    let aligned_ro_ptr = page_align(wasm_alloc_ptr, page_size);
-    let aligned_rw_ptr = page_align(aligned_ro_ptr + READ_ONLY_BUF_SIZE as i64, page_size);
+    let malloc = |size: i32| -> i32 {
+        let wasm_malloc: Func<i32, i32> = instance.exports.get("malloc").unwrap();
+        wasm_malloc.call(size).expect("malloc failed")
+    };
 
-    // Map the buffers into the aligned locations.
-    let buffers = Buffers::new(aligned_ro_ptr, aligned_rw_ptr);
+    let set_shared = |ro_index:i32, ro_size:i32, rw_index:i32, rw_size: i32| {
+        let wasm_set_shared: Func<(i32, i32, i32, i32)> = instance.exports.get("set_shared").unwrap();
+        wasm_set_shared.call(ro_index, ro_size, rw_index, rw_size).expect("set_shared failed");
+    };
 
-    // Convert the aligned buffer locations into wasm linear memory indexes.
-    // We want to skip the signal bytes when passing the r/w buffer into the wasm instance.
-    let ro_index = (buffers.shared_ro as i64 - wasm_memory_base) as i32;
-    let rw_index = (buffers.shared_rw as i64 - wasm_memory_base) as i32 + SIGNAL_BYTES;
-
-    let set_shared: Func<(i32, i32, i32, i32)> = instance.exports.get("set_shared").unwrap();
-    set_shared.call(ro_index, READ_ONLY_BUF_SIZE, rw_index, READ_WRITE_BUF_SIZE - SIGNAL_BYTES)
-        .expect("set_shared failed");
-
-    buffers
+    Buffers::new(wasm_memory_base, malloc, set_shared)
 }

@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 use common::*;
-use std::{env, fs, io::prelude::*, process};
+use std::{cell::RefCell, env, fs, io::prelude::*, process};
 use wasmi::RuntimeValue::I32;
 
 fn main() {
@@ -87,44 +87,30 @@ impl Context {
     }
 
     fn map_shared_buffers(&mut self, instance: &wasmi::ModuleRef) {
-        // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
-        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        let wasm_alloc_size = READ_ONLY_BUF_SIZE + READ_WRITE_BUF_SIZE + 3 * page_size as i32;
+        let wasm_memory_base = self.memory().with_direct_access(|buf| buf.as_ptr() as i64);
 
-        let wasm_alloc_res = instance.invoke_export("malloc", &[I32(wasm_alloc_size)], self)
-            .expect("malloc failed")
-            .expect("no value returned from malloc");
+        let cell = RefCell::new(self);
 
-        let wasm_alloc_index = match wasm_alloc_res {
-            I32(v) => v,
-            _ => panic!("invalid value type returned from malloc"),
+        let malloc = |size: i32| -> i32 {
+            let wasm_alloc_res = instance.invoke_export("malloc", &[I32(size)], *cell.borrow_mut())
+                .expect("malloc failed")
+                .expect("no value returned from malloc");
+            match wasm_alloc_res {
+                I32(v) => v,
+                _ => panic!("invalid value type returned from malloc"),
+            }
         };
 
-        // Get the location of wasm's linear memory buffer in our address space.
-        let wasm_memory_base = self.memory().with_direct_access(|buf| buf.as_ptr() as i64);
-        let wasm_alloc_ptr = wasm_memory_base + wasm_alloc_index as i64;
+        let set_shared = |ro_index:i32, ro_size:i32, rw_index:i32, rw_size: i32| {
+            instance.invoke_export(
+                "set_shared",
+                &[I32(ro_index), I32(ro_size), I32(rw_index), I32(rw_size)],
+                *cell.borrow_mut()
+            ).expect("set_shared failed");
+        };
 
-        // Align the shared buffers inside wasm's linear memory against our page boundaries.
-        let aligned_ro_ptr = page_align(wasm_alloc_ptr, page_size);
-        let aligned_rw_ptr = page_align(aligned_ro_ptr + READ_ONLY_BUF_SIZE as i64, page_size);
-
-        // Map the buffers into the aligned locations.
-        self.buffers_ref.replace(Buffers::new(aligned_ro_ptr, aligned_rw_ptr));
-
-        // Convert the aligned buffer locations into wasm linear memory indexes.
-        // We want to skip the signal bytes when passing the r/w buffer into the wasm instance.
-        let ro_index = (self.buffers().shared_ro as i64 - wasm_memory_base) as i32;
-        let rw_index = (self.buffers().shared_rw as i64 - wasm_memory_base) as i32 + SIGNAL_BYTES;
-        instance.invoke_export(
-            "set_shared",
-            &[
-                I32(ro_index),
-                I32(READ_ONLY_BUF_SIZE),
-                I32(rw_index),
-                I32(READ_WRITE_BUF_SIZE - SIGNAL_BYTES)
-            ],
-            self
-        ).expect("set_shared failed");
+        let buffers = Buffers::new(wasm_memory_base, malloc, set_shared);
+        cell.borrow_mut().buffers_ref.replace(buffers);
     }
 }
 
