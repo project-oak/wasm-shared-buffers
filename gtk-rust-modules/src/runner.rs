@@ -84,10 +84,10 @@ pub extern fn tick() {
     } else {
       // Run! ..but with some randomness.
       r.state = State::Running;
-      match unsafe { rand() } % 3 {
-        0 => (step(dx), rand_step()),
-        1 => (rand_step(), step(dy)),
-        2 => (step(dx), step(dy)),
+      match unsafe { rand().abs() } % 3 {
+        0 => (dx, rand_step()),
+        1 => (rand_step(), dy),
+        2 => (dx, dy),
         _ => todo!(),
       }
     };

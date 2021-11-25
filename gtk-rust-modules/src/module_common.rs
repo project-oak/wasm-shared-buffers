@@ -61,31 +61,23 @@ pub fn rand_step() -> i32 {
   // let ctx = *guard.as_ref().expect("ctx not initialized");
   // let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
   // (rng.gen::<i32>() % 3) - 1
-  (unsafe {rand()} % 3) - 1
+  ((unsafe {rand()}).abs() % 3) - 1
 }
 
 pub fn move_by(grid: &GridType, x: &mut usize, y: &mut usize, mx: i32, my: i32) {
   // If the dest cell is blocked, try a random move;
   // if that's also blocked just stay still.
+  let (mx, my) = (step(mx), step(my));
   let mut tx: usize = (*x as i32).saturating_add(mx) as usize;
   let mut ty: usize = (*y as i32).saturating_add(my) as usize;
-  if ty >= grid.len() {
-    return;
-  }
-  if tx >= grid[ty].len() {
+  if ty >= grid.len() || tx >= grid[ty].len() {
     return;
   }
   if grid[ty][tx] == 1 {
     // TODO: This is a bit cursed
     tx = (*x as i32).saturating_add(rand_step()) as usize;
     ty = (*y as i32).saturating_add(rand_step()) as usize;
-    if ty >= grid.len() {
-      return;
-    }
-    if tx >= grid[ty].len() {
-      return;
-    }
-    if grid[ty][tx] == 1 {
+    if ty >= grid.len() || tx >= grid[ty].len() || grid[ty][tx] == 1 {
       return;
     }
   }

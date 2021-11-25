@@ -76,7 +76,7 @@ pub extern fn tick() {
       min_dist = dist;
     }
   }
-  move_by(&ctx.grid, &mut ctx.hunter.x, &mut ctx.hunter.y, step(min_dx), step(min_dy));
+  move_by(&ctx.grid, &mut ctx.hunter.x, &mut ctx.hunter.y, min_dx, min_dy);
 }
 
 #[no_mangle]
