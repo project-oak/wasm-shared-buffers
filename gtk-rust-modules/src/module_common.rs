@@ -43,7 +43,7 @@ macro_rules! print {
   };
 }
 
-pub type GridType = [[i32; GRID_H]; GRID_W];
+pub type GridType = [[i32; GRID_W]; GRID_H];
 
 pub struct Context {
   pub grid: Box<GridType>,
