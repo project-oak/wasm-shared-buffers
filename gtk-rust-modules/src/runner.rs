@@ -47,11 +47,11 @@ pub extern fn malloc_(size: usize) -> cptr {
 }
 
 #[no_mangle]
-pub extern fn init(_rand_seed: i32) {
+pub extern fn init(rand_seed: i32) {
   let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
   let ctx: &mut Context = (guard.as_mut()).expect("ctx not initialized");
   // ctx.rng = rand::thread_rng().fill(rand_seed); // Something like this?
-  // srand(rand_seed);
+  srand(rand_seed as usize);
   for r in &mut *ctx.runners {
     r.x = 1 + rand_usize() % (GRID_W - 2);
     r.y = 1 + rand_usize() % (GRID_H - 2);
@@ -84,7 +84,7 @@ pub extern fn tick() {
     } else {
       // Run! ..but with some randomness.
       r.state = State::Running;
-      match unsafe { rand().abs() } % 3 {
+      match rand().abs() % 3 {
         0 => (dx, rand_step()),
         1 => (rand_step(), dy),
         2 => (dx, dy),

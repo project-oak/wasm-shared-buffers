@@ -23,11 +23,28 @@ pub const SCARE_DIST: i32 = 10;
 
 extern "C" {
   pub fn print_callback(len: usize, msg: *const u8); // len should be usize
-  pub fn rand() -> i32;
+  // pub fn rand() -> i32;
+}
+
+static mut RAND_VALUE: usize = 0;
+const SOME_LARGEISH_PRIME: usize = 137;
+const SOME_OTHER_LARGEISH_PRIME: usize = 7;
+
+pub fn srand(rand_seed: usize) {
+  unsafe {
+    RAND_VALUE = rand_seed as usize;
+  }
+}
+
+pub fn rand() -> i32 {
+  rand_usize() as i32
 }
 
 pub fn rand_usize() -> usize {
-  unsafe { rand() as usize }
+  unsafe {
+    RAND_VALUE = (RAND_VALUE.wrapping_add(SOME_LARGEISH_PRIME)).wrapping_mul(SOME_OTHER_LARGEISH_PRIME);
+  RAND_VALUE
+  }
 }
 
 pub fn print_str(s: &str) {
@@ -61,7 +78,7 @@ pub fn rand_step() -> i32 {
   // let ctx = *guard.as_ref().expect("ctx not initialized");
   // let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
   // (rng.gen::<i32>() % 3) - 1
-  ((unsafe {rand()}).abs() % 3) - 1
+  (rand().abs() % 3) - 1
 }
 
 pub fn move_by(grid: &GridType, x: &mut usize, y: &mut usize, mx: i32, my: i32) {

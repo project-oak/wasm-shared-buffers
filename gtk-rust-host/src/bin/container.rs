@@ -66,7 +66,6 @@ struct Context {
 
 impl Context {
     const PRINT_CALLBACK: usize = 0;
-    const RAND_CALLBACK: usize = 1;
 
     fn new() -> Self {
         Self {
@@ -154,9 +153,6 @@ impl wasmi::Externals for Context {
             let buf = self.memory().get(ptr, len).unwrap();
             print!("{}", String::from_utf8(buf).unwrap());
             Ok(None)
-        } else if index == Self::RAND_CALLBACK {
-            let value: i32 = unsafe {rand()};
-            Ok(Some(wasmi::RuntimeValue::from(value)))
         } else {
             panic!("unimplemented function at {}", index);
         }
@@ -167,8 +163,6 @@ impl wasmi::ModuleImportResolver for Context {
     fn resolve_func(&self, field_name: &str, signature: &wasmi::Signature) -> Result<wasmi::FuncRef, wasmi::Error> {
         if field_name == "print_callback" {
             Ok(wasmi::FuncInstance::alloc_host(signature.clone(), Self::PRINT_CALLBACK))
-        } else if field_name == "rand" {
-            Ok(wasmi::FuncInstance::alloc_host(signature.clone(), Self::RAND_CALLBACK))
         } else {
             panic!("unexpected export {}", field_name);
         }
