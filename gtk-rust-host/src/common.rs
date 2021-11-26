@@ -27,7 +27,7 @@ pub const READ_WRITE_BUF_SIZE: i32 = SIGNAL_BYTES + 8 + N_RUNNERS * 12;
 pub const SIGNAL_BYTES: i32 = 8;
 pub const HUNTER_SIGNAL_INDEX: usize = 0;
 pub const RUNNER_SIGNAL_INDEX: usize = 1;
-pub const SIGNAL_REPS: i32 = 300;
+pub const SIGNAL_REPS: i32 = 600;
 pub const SIGNAL_WAIT: u64 = 10;
 
 // Grid setup.

@@ -56,7 +56,7 @@ impl HostContext<'_> {
     fn new(hunter_path: &str, runner_path: &str) -> Self {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
-        fork_container("gtk-rust-host/target/debug/container-wasmer", hunter_path, HUNTER_SIGNAL_INDEX);
+        fork_container("gtk-rust-host/target/debug/container-wasmi", hunter_path, HUNTER_SIGNAL_INDEX);
         fork_container("gtk-rust-host/target/debug/container-wasmi", runner_path, RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
@@ -126,8 +126,7 @@ fn fork_container(binary: &str, module: &str, signal_index: usize) {
     match fork() {
         Ok(Fork::Parent(_)) => (),
         Ok(Fork::Child) => {
-            let cmd = String::from("target/debug/") + binary;
-            let err = exec::execvp(cmd, &[binary, module, &signal_index.to_string()]);
+            let err = exec::execvp(binary, &[binary, module, &signal_index.to_string()]);
             panic!("exec failed: {}", err); // should not be reached
         }
         Err(_) => panic!("fork failed"),

@@ -22,6 +22,9 @@ WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 
 RUST_WASM_TARGET="wasm32-unknown-unknown"
+RUST_HOST="gtk-rust-host/Cargo.toml"
+RUST_MODULES="gtk-rust-modules/Cargo.toml"
+RUST_MODULES_OUT="gtk-rust-modules/target/${RUST_WASM_TARGET}/debug"
 
 setup_deps() {
   mkdir -p deps
@@ -56,9 +59,9 @@ get_rust_tooling() {
   fi
 
   echo "Ensuring we have the latest rust tool chains"
-  rustup toolchain install nightly
-  echo "Set nightly as default"
-  rustup default nightly
+  rustup toolchain install stable
+  echo "Set stable as default"
+  rustup default stable
 
   echo "Installing Wasm target for Rust"
   # rustup target add wasm32-wasi
@@ -94,8 +97,8 @@ build_gtk_wasm_rust() {
   (
     cd gtk-rust-modules
     # From go/rust+wasm
-    cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin hunter # --manifest-path "$RUST_MODULES"
-    cargo wasi build -Zmultitarget --release --target "$RUST_WASM_TARGET" --bin runner # --manifest-path "$RUST_MODULES"
+    cargo build --target "$RUST_WASM_TARGET" --bin hunter # --manifest-path "$RUST_MODULES"
+    cargo build --target "$RUST_WASM_TARGET" --bin runner # --manifest-path "$RUST_MODULES"
   )
 }
 
@@ -121,10 +124,6 @@ run() {
   ./host "$@"
 }
 
-RUST_HOST="gtk-rust-host/Cargo.toml"
-RUST_MODULES="gtk-rust-modules/Cargo.toml"
-RUST_MODULES_OUT="gtk-rust-modules/target/${RUST_WASM_TARGET}/release"
-
 case "$1" in
   gc) # C-based GTK demo
     setup_deps
@@ -147,6 +146,7 @@ case "$1" in
     cd gtk-c
     build_host $(pkg-config --cflags --libs gtk4)
     run "../${RUST_MODULES_OUT}/hunter.wasm" "../${RUST_MODULES_OUT}/runner.wasm"
+    # run "../${RUST_MODULES_OUT}/runner.wasm" "../${RUST_MODULES_OUT}/hunter.wasm"
     ;;
 
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt

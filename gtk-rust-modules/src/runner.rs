@@ -68,8 +68,8 @@ pub extern fn tick() {
     if r.state == State::Dead {
       continue;
     }
-    let dx: i32 = (r.x - ctx.hunter.x) as i32;
-    let dy: i32 = (r.y - ctx.hunter.y) as i32;
+    let dx: i32 = r.x as i32 - ctx.hunter.x as i32;
+    let dy: i32 = r.y as i32 - ctx.hunter.y as i32;
     // If the hunter has reached us, we're dead.
     if dx == 0 && dy == 0 {
       r.state = State::Dead;
@@ -88,7 +88,10 @@ pub extern fn tick() {
         0 => (dx, rand_step()),
         1 => (rand_step(), dy),
         2 => (dx, dy),
-        _ => todo!(),
+        n => {
+          print!("FAILED {}", n);
+          todo!()
+        }
       }
     };
     move_by(&ctx.grid, &mut r.x, &mut r.y, mx, my);

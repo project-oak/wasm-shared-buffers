@@ -30,9 +30,9 @@ pub extern fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32)
   unsafe {
     ctx.replace(
       Context {
-        grid: Box::from_raw(ro_ptr as *mut GridType),
-        hunter: Box::from_raw(rw_ptr as *mut Hunter),
-        runners: Box::from_raw(rw_ptr.add(std::mem::size_of::<Hunter>()) as *mut [Runner; N_RUNNERS]),
+        grid: Box::from_raw(ro_ptr as _),
+        hunter: Box::from_raw(rw_ptr as _),
+        runners: Box::from_raw(rw_ptr.add(std::mem::size_of::<Hunter>()) as _),
       }
     );
   }
@@ -67,8 +67,8 @@ pub extern fn tick() {
     if r.state == State::Dead {
       continue;
     }
-    let dx: i32 = r.x as i32 - (*ctx.hunter).x as i32;
-    let dy: i32 = r.y as i32 - (*ctx.hunter).y as i32;
+    let dx: i32 = r.x as i32 - ctx.hunter.x as i32;
+    let dy: i32 = r.y as i32 - ctx.hunter.y as i32;
     let dist = dx * dx + dy * dy;
     if dist < min_dist {
       min_dx = dx;

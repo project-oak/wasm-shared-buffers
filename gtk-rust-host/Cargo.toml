@@ -19,8 +19,12 @@ name = "common"
 path = "src/common.rs"
 
 [[bin]]
-name = "container"
-path = "src/bin/container.rs"
+name = "container-wasmer"
+path = "src/bin/container-wasmer.rs"
+
+[[bin]]
+name = "container-wasmi"
+path = "src/bin/container-wasmi.rs"
 
 [[bin]]
 name = "host"

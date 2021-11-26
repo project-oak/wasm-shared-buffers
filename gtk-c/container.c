@@ -346,6 +346,7 @@ static void command_loop() {
       // Send ack to host.
       send(cmd);
     } else {
+      printf("CMD -> %c\n", cmd);
       send(CMD_FAILED);
     }
   }
@@ -354,7 +355,7 @@ static void command_loop() {
 int main(int argc, const char *argv[]) {
   assert(argc == 8);
   wc.module_name = argv[1];
-  wc.label = *argv[1];
+  wc.label = argv[1][strlen(argv[1]) - 11]; // LOL
   wc.read_fd = atoi(argv[2]);
   wc.write_fd = atoi(argv[3]);
   wc.ro_name = argv[4];

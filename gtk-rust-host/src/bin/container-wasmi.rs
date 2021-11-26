@@ -92,12 +92,12 @@ impl Context {
         let cell = RefCell::new(self);
 
         let malloc = |size: i32| -> i32 {
-            let wasm_alloc_res = instance.invoke_export("malloc", &[I32(size)], *cell.borrow_mut())
-                .expect("malloc failed")
-                .expect("no value returned from malloc");
+            let wasm_alloc_res = instance.invoke_export("malloc_", &[I32(size)], *cell.borrow_mut())
+                .expect("malloc_ failed")
+                .expect("no value returned from malloc_");
             match wasm_alloc_res {
                 I32(v) => v,
-                _ => panic!("invalid value type returned from malloc"),
+                _ => panic!("invalid value type returned from malloc_"),
             }
         };
 
