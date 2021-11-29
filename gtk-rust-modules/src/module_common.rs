@@ -18,8 +18,6 @@
 
 use std::sync::{Arc, Mutex};
 
-pub const SCARE_DIST: i32 = 10;
-
 // Grid setup.
 pub const GRID_W: usize = 50;
 pub const GRID_H: usize = 30;
@@ -30,25 +28,25 @@ pub type cptr = *mut core::ffi::c_void;
 
 #[derive(Eq, PartialEq)]
 pub enum State {
-  Walking,
-  Running,
-  Dead
+    Walking,
+    Running,
+    Dead
 }
 
 pub struct Runner {
-  pub x: usize,
-  pub y: usize,
-  pub state: State,
+    pub x: usize,
+    pub y: usize,
+    pub state: State,
 }
 
 pub struct Hunter {
-  pub x: usize,
-  pub y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 extern "C" {
-  pub fn print_callback(len: usize, msg: *const u8); // len should be usize
-  // pub fn rand() -> i32;
+    pub fn print_callback(len: usize, msg: *const u8); // len should be usize
+    // pub fn rand() -> i32;
 }
 
 static mut RAND_VALUE: usize = 0;
@@ -56,50 +54,50 @@ const SOME_LARGEISH_PRIME: usize = 137;
 const SOME_OTHER_LARGEISH_PRIME: usize = 7;
 
 pub fn srand(rand_seed: usize) {
-  unsafe {
-    RAND_VALUE = rand_seed as usize;
-  }
+    unsafe {
+        RAND_VALUE = rand_seed as usize;
+    }
 }
 
 pub fn rand() -> i32 {
-  rand_usize() as i32
+    rand_usize() as i32
 }
 
 pub fn rand_usize() -> usize {
-  unsafe {
-    RAND_VALUE = (RAND_VALUE.wrapping_add(SOME_LARGEISH_PRIME)).wrapping_mul(SOME_OTHER_LARGEISH_PRIME);
-  RAND_VALUE
-  }
+    unsafe {
+        RAND_VALUE = (RAND_VALUE.wrapping_add(SOME_LARGEISH_PRIME)).wrapping_mul(SOME_OTHER_LARGEISH_PRIME);
+        RAND_VALUE
+    }
 }
 
 pub fn print_str(s: &str) {
-  unsafe {
-    print_callback(s.len(), s.as_ptr());
-  }
+    unsafe {
+        print_callback(s.len(), s.as_ptr());
+    }
 }
 
 #[macro_export]
 macro_rules! print {
-  ($fmt:expr $(, $value:expr)* ) => {
-      let s = format!($fmt $(, $value)*);
-      print_str(&s);
-  };
+    ($fmt:expr $(, $value:expr)* ) => {
+        let s = format!($fmt $(, $value)*);
+        print_str(&s);
+    };
 }
 
 #[macro_export]
 macro_rules! println {
-  ($fmt:expr $(, $value:expr)* ) => {
-      let s = format!($fmt $(, $value)*)+"\n";
-      print_str(&s);
-  };
+    ($fmt:expr $(, $value:expr)* ) => {
+        let s = format!($fmt $(, $value)*)+"\n";
+        print_str(&s);
+    };
 }
 
 pub type GridType = [[i32; GRID_W]; GRID_H];
 
 pub struct Context {
-  pub grid: Box<GridType>,
-  pub hunter: Box<Hunter>,
-  pub runners: Box<[Runner; N_RUNNERS]>,
+    pub grid: Box<GridType>,
+    pub hunter: Box<Hunter>,
+    pub runners: Box<[Runner; N_RUNNERS]>,
 }
 
 use lazy_static::lazy_static;
@@ -108,41 +106,40 @@ lazy_static! {
 }
 
 pub fn rand_step() -> i32 {
-  // let guard = CTX.lock().expect("Failed to aquire ctx lock");
-  // let ctx = *guard.as_ref().expect("ctx not initialized");
-  // let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
-  // (rng.gen::<i32>() % 3) - 1
-  (rand().abs() % 3) - 1
+    // let guard = CTX.lock().expect("Failed to aquire ctx lock");
+    // let ctx = *guard.as_ref().expect("ctx not initialized");
+    // let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
+    // (rng.gen::<i32>() % 3) - 1
+    (rand().abs() % 3) - 1
 }
 
 pub fn move_by(grid: &GridType, x: &mut usize, y: &mut usize, mx: i32, my: i32) {
-  // If the dest cell is blocked, try a random move;
-  // if that's also blocked just stay still.
-  let (mx, my) = (step(mx), step(my));
-  let mut tx: usize = (*x as i32).saturating_add(mx) as usize;
-  let mut ty: usize = (*y as i32).saturating_add(my) as usize;
-  if ty >= grid.len() || tx >= grid[ty].len() {
-    return;
-  }
-  if grid[ty][tx] == 1 {
-    // TODO: This is a bit cursed
-    tx = (*x as i32).saturating_add(rand_step()) as usize;
-    ty = (*y as i32).saturating_add(rand_step()) as usize;
-    if ty >= grid.len() || tx >= grid[ty].len() || grid[ty][tx] == 1 {
-      return;
+    // If the dest cell is blocked, try a random move;
+    // if that's also blocked just stay still.
+    let (mx, my) = (step(mx), step(my));
+    let mut tx: usize = (*x as i32).saturating_add(mx) as usize;
+    let mut ty: usize = (*y as i32).saturating_add(my) as usize;
+    if ty >= grid.len() || tx >= grid[ty].len() {
+        return;
     }
-  }
-  *x = tx;
-  *y = ty;
+    if grid[ty][tx] == 1 {
+        // TODO: This is a bit cursed
+        tx = (*x as i32).saturating_add(rand_step()) as usize;
+        ty = (*y as i32).saturating_add(rand_step()) as usize;
+        if ty >= grid.len() || tx >= grid[ty].len() || grid[ty][tx] == 1 {
+            return;
+        }
+    }
+    *x = tx;
+    *y = ty;
 }
 
 // Converts an arbitrary delta into a unit step.
 pub fn step(delta: i32) -> i32 {
-  if delta == 0 {
-    0
-  } else if delta > 0 {
-    1
-  } else {
-    -1
-  }
+    use std::cmp::Ordering::*;
+    match delta.cmp(&0) {
+        Equal => 0,
+        Greater => 1,
+        Less => -1,
+    }
 }

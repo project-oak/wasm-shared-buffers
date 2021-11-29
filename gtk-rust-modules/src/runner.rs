@@ -17,6 +17,8 @@
 mod module_common;
 use module_common::*;
 
+const SCARE_DIST: i32 = 10;
+
 #[no_mangle]
 pub extern fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32) {
   let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
