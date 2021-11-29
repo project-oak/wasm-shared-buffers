@@ -87,8 +87,6 @@ impl Context {
     }
 
     fn map_shared_buffers(&mut self, instance: &wasmi::ModuleRef) {
-        let wasm_memory_base = self.memory().with_direct_access(|buf| buf.as_ptr() as i64);
-
         let cell = RefCell::new(self);
 
         let malloc = |size: i32| -> i32 {
@@ -109,7 +107,11 @@ impl Context {
             ).expect("set_shared failed");
         };
 
-        let buffers = Buffers::new(wasm_memory_base, malloc, set_shared);
+        let buffers = Buffers::new(
+          || self.memory().with_direct_access(|buf| buf.as_ptr() as i64),
+          malloc,
+          set_shared
+        );
         cell.borrow_mut().buffers_ref.replace(buffers);
     }
 }

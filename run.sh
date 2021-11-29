@@ -22,6 +22,7 @@ WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 
 RUST_WASM_TARGET="wasm32-unknown-unknown"
+# RUST_WASM_TARGET="wasm32-wasi"
 RUST_HOST="gtk-rust-host/Cargo.toml"
 RUST_MODULES="gtk-rust-modules/Cargo.toml"
 RUST_MODULES_OUT="gtk-rust-modules/target/${RUST_WASM_TARGET}/debug"
@@ -64,7 +65,6 @@ get_rust_tooling() {
   rustup default stable
 
   echo "Installing Wasm target for Rust"
-  # rustup target add wasm32-wasi
   rustup target add "$RUST_WASM_TARGET"
 
   echo "Installing Wasm support for Cargo"

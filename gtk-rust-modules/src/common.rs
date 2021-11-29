@@ -14,20 +14,6 @@
 // limitations under the License.
 //
 
-// Shared buffer config.
-pub const READ_ONLY_BUF_NAME: &str = "/shared_ro";
-pub const READ_WRITE_BUF_NAME: &str = "/shared_rw";
-pub const READ_ONLY_BUF_SIZE: usize = GRID_W * GRID_H * 4;
-// 2 * i32 for signals, 2 * i32 for hunter, N * 3 * i32 for runners
-pub const READ_WRITE_BUF_SIZE: usize = SIGNAL_BYTES + 8 + N_RUNNERS * 12;
-
-// IPC config.
-pub const SIGNAL_BYTES: usize = 8;
-pub const HUNTER_SIGNAL_INDEX: usize = 0;
-pub const RUNNER_SIGNAL_INDEX: usize = 1;
-pub const SIGNAL_REPS: i32 = 100;
-pub const SIGNAL_WAIT: u64 = 10;
-
 // Grid setup.
 pub const GRID_W: usize = 50;
 pub const GRID_H: usize = 30;

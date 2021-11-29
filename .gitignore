@@ -1,5 +1,6 @@
 deps
-*/*.wasm
+*.wasm
+*.wat
 */container
 */host
 */target

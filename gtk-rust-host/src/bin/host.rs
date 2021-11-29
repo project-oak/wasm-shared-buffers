@@ -213,7 +213,7 @@ impl Actors<'_> {
                 }
                 thread::sleep(Duration::from_millis(SIGNAL_WAIT));
             }
-            panic!("failed to receive idle signal");
+            panic!("failed to receive idle for signal {}", signal as i32);
         }
     }
 
