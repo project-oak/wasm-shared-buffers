@@ -81,7 +81,16 @@ pub fn print_str(s: &str) {
 #[macro_export]
 macro_rules! print {
   ($fmt:expr $(, $value:expr)* ) => {
-      print_str(&format!($fmt $(, $value)*));
+      let s = format!($fmt $(, $value)*);
+      print_str(&s);
+  };
+}
+
+#[macro_export]
+macro_rules! println {
+  ($fmt:expr $(, $value:expr)* ) => {
+      let s = format!($fmt $(, $value)*)+"\n";
+      print_str(&s);
   };
 }
 
