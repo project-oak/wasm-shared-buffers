@@ -14,13 +14,7 @@
 // limitations under the License.
 //
 
-// #[macro_use]
-// extern crate lazy_static;
-mod common;
 mod module_common;
-// use std::sync::{Arc, Mutex};
-
-use common::*;
 use module_common::*;
 
 #[no_mangle]

@@ -16,10 +16,35 @@
 
 // Imported via `use` in hunter.rs and runner.rs
 
-use crate::common::*;
 use std::sync::{Arc, Mutex};
 
 pub const SCARE_DIST: i32 = 10;
+
+// Grid setup.
+pub const GRID_W: usize = 50;
+pub const GRID_H: usize = 30;
+pub const N_RUNNERS: usize = 15;
+
+#[allow(non_camel_case_types)]
+pub type cptr = *mut core::ffi::c_void;
+
+#[derive(Eq, PartialEq)]
+pub enum State {
+  Walking,
+  Running,
+  Dead
+}
+
+pub struct Runner {
+  pub x: usize,
+  pub y: usize,
+  pub state: State,
+}
+
+pub struct Hunter {
+  pub x: usize,
+  pub y: usize,
+}
 
 extern "C" {
   pub fn print_callback(len: usize, msg: *const u8); // len should be usize

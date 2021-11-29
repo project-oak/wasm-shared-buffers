@@ -89,6 +89,14 @@ impl Context {
     fn map_shared_buffers(&mut self, instance: &wasmi::ModuleRef) {
         let cell = RefCell::new(self);
 
+        let get_memory_base = || -> i64 {
+          instance.export_by_name("memory")
+            .expect("module does not export memory")
+            .as_memory()
+            .expect("module.memory is not a memory")
+            .with_direct_access(|buf| buf.as_ptr() as i64)
+        };
+
         let malloc = |size: i32| -> i32 {
             let wasm_alloc_res = instance.invoke_export("malloc_", &[I32(size)], *cell.borrow_mut())
                 .expect("malloc_ failed")
@@ -108,7 +116,7 @@ impl Context {
         };
 
         let buffers = Buffers::new(
-          || self.memory().with_direct_access(|buf| buf.as_ptr() as i64),
+          get_memory_base,
           malloc,
           set_shared
         );

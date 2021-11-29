@@ -71,8 +71,9 @@ pub struct Buffers {
 impl Buffers {
     // Set up the shared buffers, given the host address space of the wasm linear memory
     // and access to the 'malloc' and 'set_shared' functions exported by the wasm modules.
-    pub fn new<M, S>(get_wasm_memory_base: Fn() -> i64, malloc: M, set_shared: S) -> Self
+    pub fn new<B, M, S>(get_wasm_memory_base: B, malloc: M, set_shared: S) -> Self
     where
+        B: Fn() -> i64,
         M: Fn(i32) -> i32,
         S: Fn(i32, i32, i32, i32),
     {
