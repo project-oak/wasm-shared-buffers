@@ -83,7 +83,7 @@ impl Context {
     fn wasm_call(&mut self, instance: &wasmi::ModuleRef, name: &str, args: &[wasmi::RuntimeValue]) {
         instance
             .invoke_export(name, args, self)
-            .expect(&format!("wasm call '{}' failed", name));
+            .unwrap_or_else(|_| panic!("wasm call '{}' failed", name));
     }
 
     fn map_shared_buffers(&mut self, instance: &wasmi::ModuleRef) {

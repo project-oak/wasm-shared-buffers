@@ -95,24 +95,13 @@ pub extern fn tick() {
 }
 
 #[no_mangle]
-<<<<<<< HEAD
-  pub extern fn modify_grid() {
-    print!("[h] Attempting to write to read-only memory...\n");
-=======
-pub extern "C" fn modify_grid() {
-    println!("[h] Attempting to write to read-only memory...");
->>>>>>> 5b637ea (Fixed a typo and added a println for the modules)
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = (*guard).as_mut().expect("ctx not initialized");
-    ctx.grid[0][0] = 2;
-  }
-
-<<<<<<< HEAD
-  fn main() {
-    println!("hunter: No meant to be run as a main");
-  }
-=======
-fn main() {
-    println!("runner: No meant to be run as a main");
+pub extern fn modify_grid() {
+  println!("[h] Attempting to write to read-only memory...");
+  let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
+  let ctx = (*guard).as_mut().expect("ctx not initialized");
+  ctx.grid[0][0] = 2;
 }
->>>>>>> 5b637ea (Fixed a typo and added a println for the modules)
+
+fn main() {
+  println!("runner: No meant to be run as a main");
+}

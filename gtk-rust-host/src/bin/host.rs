@@ -246,7 +246,7 @@ enum State {
 
 impl State {
     pub fn from(value: i32) -> Self {
-        assert!(value >= 0 && value < 3);
+        assert!((0..3).contains(&value));
         [Self::Walking, Self::Running, Self::Dead][value as usize]
     }
 }
@@ -323,8 +323,8 @@ fn on_draw(ctx: Rc<RefCell<HostContext>>, _da: &gtk::DrawingArea, cr: &cairo::Co
     cr.rectangle(hunter.x as f64 * SCALE, hunter.y as f64 * SCALE, SCALE, SCALE);
     cr.fill().unwrap();
 
-    const TWO_PI: f64 = 2.0 * 3.141593;
     const HSCALE: f64 = SCALE / 2.0;
+    const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
     for i in 0..N_RUNNERS {
         let (pos, state) = hc.actors.runner(i);
         match state {

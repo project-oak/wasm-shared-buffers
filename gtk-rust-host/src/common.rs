@@ -56,7 +56,7 @@ pub enum Signal {
 
 impl Signal {
     pub fn from(value: i32) -> Self {
-        assert!(value >= 0 && value < 5);
+        assert!((0..5).contains(&value));
         [Self::Idle, Self::Init, Self::Tick, Self::ModifyGrid, Self::Exit][value as usize]
     }
 }
@@ -129,15 +129,15 @@ impl Buffers {
 impl Drop for Buffers {
     fn drop(&mut self) {
         unsafe {
-            if self.shared_ro != std::ptr::null_mut() {
-                if libc::munmap(self.shared_ro, READ_ONLY_BUF_SIZE as usize) == -1 {
-                    println!("munmap failed for shared_ro");
-                }
+            if !self.shared_ro.is_null()
+                && libc::munmap(self.shared_ro, READ_ONLY_BUF_SIZE as usize) == -1
+            {
+                println!("munmap failed for shared_ro");
             }
-            if self.shared_rw != std::ptr::null_mut() {
-                if libc::munmap(self.shared_rw, READ_WRITE_BUF_SIZE as usize) == -1 {
-                    println!("munmap failed for shared_rw");
-                }
+            if !self.shared_rw.is_null()
+                && libc::munmap(self.shared_rw, READ_WRITE_BUF_SIZE as usize) == -1
+            {
+                println!("munmap failed for shared_rw");
             }
         }
     }
