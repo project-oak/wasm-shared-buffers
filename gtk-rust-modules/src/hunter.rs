@@ -82,5 +82,5 @@ pub extern fn modify_grid() {
 }
 
 fn main() {
-    println!("hunter: No meant to be run as a main");
+    println!("hunter: Not meant to be run as a main");
 }

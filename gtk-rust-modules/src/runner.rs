@@ -96,12 +96,12 @@ pub extern fn tick() {
 
 #[no_mangle]
 pub extern fn modify_grid() {
-  println!("[h] Attempting to write to read-only memory...");
+  println!("[r] Attempting to write to read-only memory...");
   let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
   let ctx = (*guard).as_mut().expect("ctx not initialized");
   ctx.grid[0][0] = 2;
 }
 
 fn main() {
-  println!("runner: No meant to be run as a main");
+  println!("runner: Not meant to be run as a main");
 }
