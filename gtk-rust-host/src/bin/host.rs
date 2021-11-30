@@ -28,11 +28,7 @@ fn main() {
     let app = gtk::Application::new(None, gio::ApplicationFlags::HANDLES_OPEN);
     {
         let ctx = ctx.clone();
-        app.connect_activate(move |app| on_activate(ctx.clone(), app));
-    }
-    {
-        let ctx = ctx.clone();
-        app.connect_open(move |app, _files, _| on_activate(ctx.clone(), app));
+        app.connect_open(move |app, _files, _| on_open(ctx.clone(), app));
     }
     app.connect_shutdown(move |_app| {
         // glib's timeout infrastructure holds a references that prevents HostContext
@@ -57,7 +53,7 @@ impl HostContext<'_> {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
         fork_container("gtk-rust-host/target/debug/container-wasmi", hunter_path, HUNTER_SIGNAL_INDEX);
-        fork_container("gtk-rust-host/target/debug/container-wasmi", runner_path, RUNNER_SIGNAL_INDEX);
+        fork_container("gtk-rust-host/target/debug/container-wasmer", runner_path, RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
         let mut ctx = Self {
@@ -251,7 +247,7 @@ impl State {
     }
 }
 
-fn on_activate(ctx: Rc<RefCell<HostContext<'static>>>, app: &gtk::Application) {
+fn on_open(ctx: Rc<RefCell<HostContext<'static>>>, app: &gtk::Application) {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("WebAssembly shared buffers [Rust]")
