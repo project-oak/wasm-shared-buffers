@@ -224,7 +224,7 @@ static void app_close(GtkWidget *button, gpointer data) {
   g_application_quit(G_APPLICATION(data));
 }
 
-static void on_activate(GtkApplication *app, gpointer data) {
+static void on_open(GtkApplication *app, gpointer data) {
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "WebAssembly shared buffers [C]");
 
@@ -281,8 +281,7 @@ int main(int argc, char *argv[]) {
   assert(send(CMD_INIT));
 
   GtkApplication *app = gtk_application_new(NULL, G_APPLICATION_HANDLES_OPEN);
-  g_signal_connect(app, "activate", G_CALLBACK(on_activate), &ctx);
-  g_signal_connect(app, "open", G_CALLBACK(on_activate), &ctx);
+  g_signal_connect(app, "open", G_CALLBACK(on_open), &ctx);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), &ctx);
   return g_application_run(G_APPLICATION(app), argc, argv);
 }
