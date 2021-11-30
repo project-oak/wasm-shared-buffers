@@ -90,11 +90,7 @@ impl Context {
         let cell = RefCell::new(self);
 
         let get_memory_base = || -> i64 {
-          instance.export_by_name("memory")
-            .expect("module does not export memory")
-            .as_memory()
-            .expect("module.memory is not a memory")
-            .with_direct_access(|buf| buf.as_ptr() as i64)
+            cell.borrow().memory().with_direct_access(|buf| buf.as_ptr() as i64)
         };
 
         let malloc = |size: i32| -> i32 {
