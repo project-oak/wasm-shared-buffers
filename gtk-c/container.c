@@ -47,7 +47,7 @@ const char *kExportFuncNames[] = {
 
 typedef struct {
   const char *module_name;
-  char label;
+  const char *label;
   int read_fd;
   int write_fd;
 
@@ -86,7 +86,7 @@ static void info(const char *fmt, ...) {
   va_start(ap, fmt);
   vsnprintf(msg, 500, fmt, ap);
   va_end(ap);
-  printf("[%c] %s\n", wc.label, msg);
+  printf("[%s] %s\n", wc.label, msg);
 }
 
 static bool error(const char *fmt, ...) {
@@ -95,7 +95,7 @@ static bool error(const char *fmt, ...) {
   va_start(ap, fmt);
   vsnprintf(msg, 500, fmt, ap);
   va_end(ap);
-  fprintf(stderr, "[%c] >> %s\n", wc.label, msg);
+  fprintf(stderr, "[%s] >> %s\n", wc.label, msg);
   return false;
 }
 
@@ -353,15 +353,15 @@ static void command_loop() {
 }
 
 int main(int argc, const char *argv[]) {
-  assert(argc == 8);
+  assert(argc == 9);
   wc.module_name = argv[1];
-  wc.label = argv[1][strlen(argv[1]) - 11]; // LOL
-  wc.read_fd = atoi(argv[2]);
-  wc.write_fd = atoi(argv[3]);
-  wc.ro_name = argv[4];
-  wc.ro_size = atoi(argv[5]);
-  wc.rw_name = argv[6];
-  wc.rw_size = atoi(argv[7]);
+  wc.label = argv[2];
+  wc.read_fd = atoi(argv[3]);
+  wc.write_fd = atoi(argv[4]);
+  wc.ro_name = argv[5];
+  wc.ro_size = atoi(argv[6]);
+  wc.rw_name = argv[7];
+  wc.rw_size = atoi(argv[8]);
 
   info("Container started; module '%s', pid %d", wc.module_name, getpid());
   if (init_module() && map_shared_bufs()) {
