@@ -346,7 +346,7 @@ static void command_loop() {
       // Send ack to host.
       send(cmd);
     } else {
-      printf("CMD -> %c\n", cmd);
+      printf("Command failed: %c\n", cmd);
       send(CMD_FAILED);
     }
   }
