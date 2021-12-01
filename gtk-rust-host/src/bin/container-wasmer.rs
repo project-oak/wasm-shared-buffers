@@ -60,11 +60,11 @@ fn main() {
 
 fn map_shared_buffers(instance: &Instance) -> Buffers {
     let memory: Memory =  instance.exports.get("memory").unwrap();
-    let wasm_memory_base = memory.view::<u8>().as_ptr() as i64;
+    let get_wasm_memory_base = || memory.view::<u8>().as_ptr() as i64;
 
     let malloc = |size: i32| -> i32 {
-        let wasm_malloc: Func<i32, i32> = instance.exports.get("malloc").unwrap();
-        wasm_malloc.call(size).expect("malloc failed")
+        let wasm_malloc: Func<i32, i32> = instance.exports.get("malloc_").unwrap();
+        wasm_malloc.call(size).expect("malloc_ failed")
     };
 
     let set_shared = |ro_index:i32, ro_size:i32, rw_index:i32, rw_size: i32| {
@@ -72,5 +72,5 @@ fn map_shared_buffers(instance: &Instance) -> Buffers {
         wasm_set_shared.call(ro_index, ro_size, rw_index, rw_size).expect("set_shared failed");
     };
 
-    Buffers::new(wasm_memory_base, malloc, set_shared)
+    Buffers::new(get_wasm_memory_base, malloc, set_shared)
 }

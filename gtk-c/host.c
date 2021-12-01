@@ -60,7 +60,7 @@ static void *create_shared_buffer(const char *name, int size) {
   return shared;
 }
 
-static void fork_container(Pipes *pipes, const char *module) {
+static void fork_container(Pipes *pipes, const char *module, const char *label) {
   assert(pipe(pipes->p2c) == 0);
   assert(pipe(pipes->c2p) == 0);
 
@@ -77,7 +77,7 @@ static void fork_container(Pipes *pipes, const char *module) {
     sprintf(write_fd, "%d", pipes->c2p[W]);
     sprintf(ro_size, "%d", kReadOnlyBufSize);
     sprintf(rw_size, "%d", kReadWriteBufSize);
-    execlp("./container", "container", module, read_fd, write_fd,
+    execlp("./container", "container", module, label, read_fd, write_fd,
            kReadOnlyBufName, ro_size, kReadWriteBufName, rw_size, NULL);
     assert(false);  // should not be reached
   } else {
@@ -224,7 +224,7 @@ static void app_close(GtkWidget *button, gpointer data) {
   g_application_quit(G_APPLICATION(data));
 }
 
-static void on_activate(GtkApplication *app, gpointer data) {
+static void on_open(GtkApplication *app, gpointer data) {
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "WebAssembly shared buffers [C]");
 
@@ -273,12 +273,15 @@ int main(int argc, char *argv[]) {
 
   srand(time(NULL));
   init_grid();
-  fork_container(&ctx.pipes[0], "hunter.wasm");
-  fork_container(&ctx.pipes[1], "runner.wasm");
+  if (argc <= 2) {
+    printf("usage: host hunter.wasm runner.wasm");
+  }
+  fork_container(&ctx.pipes[0], argv[1], "h"); // Path to hunter.wasm
+  fork_container(&ctx.pipes[1], argv[2], "r"); // Path to runner.wasm
   assert(send(CMD_INIT));
 
-  GtkApplication *app = gtk_application_new(NULL, G_APPLICATION_FLAGS_NONE);
-  g_signal_connect(app, "activate", G_CALLBACK(on_activate), &ctx);
+  GtkApplication *app = gtk_application_new(NULL, G_APPLICATION_HANDLES_OPEN);
+  g_signal_connect(app, "open", G_CALLBACK(on_open), &ctx);
   g_signal_connect(app, "shutdown", G_CALLBACK(on_shutdown), &ctx);
   return g_application_run(G_APPLICATION(app), argc, argv);
 }

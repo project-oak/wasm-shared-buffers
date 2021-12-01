@@ -22,16 +22,18 @@ use std::{cell::RefCell, ffi::CString, process, rc::Rc, slice, thread, time::Dur
 
 fn main() {
     println!("Host started; pid {}", process::id());
-    let ctx = Rc::new(RefCell::new(HostContext::new()));
-    let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
+    let hunter_path = std::env::args().nth(1).expect("missing hunter module path arg");
+    let runner_path = std::env::args().nth(2).expect("missing runner module path arg");
+    let ctx = Rc::new(RefCell::new(HostContext::new(&hunter_path, &runner_path)));
+    let app = gtk::Application::new(None, gio::ApplicationFlags::HANDLES_OPEN);
     {
         let ctx = ctx.clone();
-        app.connect_activate(move |app| on_activate(ctx.clone(), app));
+        app.connect_open(move |app, _files, _| on_open(ctx.clone(), app));
     }
     app.connect_shutdown(move |_app| {
         // glib's timeout infrastructure holds a references that prevents HostContext
         // from being dropped. We need to clear the timeout to fix this.
-        glib::source::source_remove(ctx.borrow_mut().timeout_id.take().unwrap());
+        glib::source::source_remove(ctx.borrow_mut().timeout_id.take().expect("Timeout could not be taken!?"));
     });
     app.run();
     println!("Host stopping");
@@ -47,11 +49,11 @@ struct HostContext<'a> {
 }
 
 impl HostContext<'_> {
-    fn new() -> Self {
+    fn new(hunter_path: &str, runner_path: &str) -> Self {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
-        fork_container("container-wasmer", "hunter.wasm", HUNTER_SIGNAL_INDEX);
-        fork_container("container-wasmi", "runner.wasm", RUNNER_SIGNAL_INDEX);
+        fork_container("gtk-rust-host/target/debug/container-wasmi", hunter_path, HUNTER_SIGNAL_INDEX);
+        fork_container("gtk-rust-host/target/debug/container-wasmer", runner_path, RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
         let mut ctx = Self {
@@ -120,8 +122,7 @@ fn fork_container(binary: &str, module: &str, signal_index: usize) {
     match fork() {
         Ok(Fork::Parent(_)) => (),
         Ok(Fork::Child) => {
-            let cmd = String::from("target/debug/") + binary;
-            let err = exec::execvp(cmd, &[binary, module, &signal_index.to_string()]);
+            let err = exec::execvp(binary, &[binary, module, &signal_index.to_string()]);
             panic!("exec failed: {}", err); // should not be reached
         }
         Err(_) => panic!("fork failed"),
@@ -208,7 +209,7 @@ impl Actors<'_> {
                 }
                 thread::sleep(Duration::from_millis(SIGNAL_WAIT));
             }
-            panic!("failed to receive idle signal");
+            panic!("failed to receive idle for signal {}", signal as i32);
         }
     }
 
@@ -241,12 +242,12 @@ enum State {
 
 impl State {
     pub fn from(value: i32) -> Self {
-        assert!(value >= 0 && value < 3);
+        assert!((0..3).contains(&value));
         [Self::Walking, Self::Running, Self::Dead][value as usize]
     }
 }
 
-fn on_activate(ctx: Rc<RefCell<HostContext<'static>>>, app: &gtk::Application) {
+fn on_open(ctx: Rc<RefCell<HostContext<'static>>>, app: &gtk::Application) {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("WebAssembly shared buffers [Rust]")
@@ -318,7 +319,7 @@ fn on_draw(ctx: Rc<RefCell<HostContext>>, _da: &gtk::DrawingArea, cr: &cairo::Co
     cr.rectangle(hunter.x as f64 * SCALE, hunter.y as f64 * SCALE, SCALE, SCALE);
     cr.fill().unwrap();
 
-    const TWO_PI: f64 = 2.0 * 3.141593;
+    const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
     const HSCALE: f64 = SCALE / 2.0;
     for i in 0..N_RUNNERS {
         let (pos, state) = hc.actors.runner(i);

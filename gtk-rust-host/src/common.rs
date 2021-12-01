@@ -28,7 +28,7 @@ pub const SIGNAL_BYTES: i32 = 8;
 pub const HUNTER_SIGNAL_INDEX: usize = 0;
 pub const RUNNER_SIGNAL_INDEX: usize = 1;
 pub const SIGNAL_REPS: i32 = 300;
-pub const SIGNAL_WAIT: u64 = 10;
+pub const SIGNAL_WAIT: u64 = 100;
 
 // Grid setup.
 pub const GRID_W: i32 = 50;
@@ -56,7 +56,7 @@ pub enum Signal {
 
 impl Signal {
     pub fn from(value: i32) -> Self {
-        assert!(value >= 0 && value < 5);
+        assert!((0..5).contains(&value));
         [Self::Idle, Self::Init, Self::Tick, Self::ModifyGrid, Self::Exit][value as usize]
     }
 }
@@ -71,14 +71,17 @@ pub struct Buffers {
 impl Buffers {
     // Set up the shared buffers, given the host address space of the wasm linear memory
     // and access to the 'malloc' and 'set_shared' functions exported by the wasm modules.
-    pub fn new<M, S>(wasm_memory_base: i64, malloc: M, set_shared: S) -> Self
+    pub fn new<B, M, S>(get_wasm_memory_base: B, malloc: M, set_shared: S) -> Self
     where
+        B: Fn() -> i64,
         M: Fn(i32) -> i32,
         S: Fn(i32, i32, i32, i32),
     {
         // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
         let wasm_alloc_index = malloc(READ_ONLY_BUF_SIZE + READ_WRITE_BUF_SIZE + 3 * page_size as i32);
+
+        let wasm_memory_base = get_wasm_memory_base();
 
         // Get the location of wasm's linear memory buffer in our address space.
         let wasm_alloc_ptr = wasm_memory_base + wasm_alloc_index as i64;
@@ -125,15 +128,13 @@ impl Buffers {
 impl Drop for Buffers {
     fn drop(&mut self) {
         unsafe {
-            if self.shared_ro != std::ptr::null_mut() {
-                if libc::munmap(self.shared_ro, READ_ONLY_BUF_SIZE as usize) == -1 {
-                    println!("munmap failed for shared_ro");
-                }
+            if !self.shared_ro.is_null()
+                && libc::munmap(self.shared_ro, READ_ONLY_BUF_SIZE as usize) == -1 {
+                println!("munmap failed for shared_ro");
             }
-            if self.shared_rw != std::ptr::null_mut() {
-                if libc::munmap(self.shared_rw, READ_WRITE_BUF_SIZE as usize) == -1 {
-                    println!("munmap failed for shared_rw");
-                }
+            if !self.shared_rw.is_null()
+                && libc::munmap(self.shared_rw, READ_WRITE_BUF_SIZE as usize) == -1 {
+                println!("munmap failed for shared_rw");
             }
         }
     }

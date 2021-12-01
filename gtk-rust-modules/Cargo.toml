@@ -1,0 +1,23 @@
+[package]
+name = "gtk-rust-modules"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+# opt-level="s" # for small code
+# panic = 'abort'
+# lto=true # for final release
+
+[dependencies]
+lazy_static = "1.4.0"
+# rand = "0.8.0"
+# wee_alloc = { version = "0.4.5", optional = true }
+
+[[bin]]
+name = "runner"
+path = "src/runner.rs"
+
+[[bin]]
+name = "hunter"
+path = "src/hunter.rs"

@@ -1,5 +1,5 @@
 [package]
-name = "host"
+name = "gtk-rust-host"
 version = "0.1.0"
 edition = "2018"
 default-run = "host"
@@ -17,3 +17,15 @@ wasmer-runtime = "*"
 [lib]
 name = "common"
 path = "src/common.rs"
+
+[[bin]]
+name = "container-wasmer"
+path = "src/bin/container-wasmer.rs"
+
+[[bin]]
+name = "container-wasmi"
+path = "src/bin/container-wasmi.rs"
+
+[[bin]]
+name = "host"
+path = "src/bin/host.rs"

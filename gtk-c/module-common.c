@@ -52,3 +52,8 @@ void move(int *x, int *y, int mx, int my) {
 int step(int delta) {
   return (delta == 0) ? 0 : ((delta > 0) ? 1 : -1);
 }
+
+EMSCRIPTEN_KEEPALIVE
+void* malloc_(size_t size) {
+  return malloc(size);
+}

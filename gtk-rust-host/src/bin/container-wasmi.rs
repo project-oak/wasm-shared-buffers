@@ -83,21 +83,23 @@ impl Context {
     fn wasm_call(&mut self, instance: &wasmi::ModuleRef, name: &str, args: &[wasmi::RuntimeValue]) {
         instance
             .invoke_export(name, args, self)
-            .expect(&format!("wasm call '{}' failed", name));
+            .unwrap_or_else(|_| panic!("wasm call '{}' failed", name));
     }
 
     fn map_shared_buffers(&mut self, instance: &wasmi::ModuleRef) {
-        let wasm_memory_base = self.memory().with_direct_access(|buf| buf.as_ptr() as i64);
-
         let cell = RefCell::new(self);
 
+        let get_memory_base = || -> i64 {
+            cell.borrow().memory().with_direct_access(|buf| buf.as_ptr() as i64)
+        };
+
         let malloc = |size: i32| -> i32 {
-            let wasm_alloc_res = instance.invoke_export("malloc", &[I32(size)], *cell.borrow_mut())
-                .expect("malloc failed")
-                .expect("no value returned from malloc");
+            let wasm_alloc_res = instance.invoke_export("malloc_", &[I32(size)], *cell.borrow_mut())
+                .expect("malloc_ failed")
+                .expect("no value returned from malloc_");
             match wasm_alloc_res {
                 I32(v) => v,
-                _ => panic!("invalid value type returned from malloc"),
+                _ => panic!("invalid value type returned from malloc_"),
             }
         };
 
@@ -109,7 +111,7 @@ impl Context {
             ).expect("set_shared failed");
         };
 
-        let buffers = Buffers::new(wasm_memory_base, malloc, set_shared);
+        let buffers = Buffers::new(get_memory_base, malloc, set_shared);
         cell.borrow_mut().buffers_ref.replace(buffers);
     }
 }
