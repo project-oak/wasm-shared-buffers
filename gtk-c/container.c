@@ -189,7 +189,6 @@ static bool init_module() {
   // Set up the 'print_callback' import function.
   own wasm_importtype_vec_t expected_imports;
   wasm_module_imports(wc.module, &expected_imports);
-  printf("FOUND IMPORTS %d\n", expected_imports.size);
   assert(expected_imports.size == 1);
   wasm_importtype_vec_delete(&expected_imports);
 
