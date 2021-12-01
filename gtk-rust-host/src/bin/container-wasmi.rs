@@ -108,14 +108,10 @@ impl Context {
                 "set_shared",
                 &[I32(ro_index), I32(ro_size), I32(rw_index), I32(rw_size)],
                 *cell.borrow_mut()
-            ).expect("set_shared failed");
+                ).expect("set_shared failed");
         };
 
-        let buffers = Buffers::new(
-          get_memory_base,
-          malloc,
-          set_shared
-        );
+        let buffers = Buffers::new(get_memory_base, malloc, set_shared);
         cell.borrow_mut().buffers_ref.replace(buffers);
     }
 }

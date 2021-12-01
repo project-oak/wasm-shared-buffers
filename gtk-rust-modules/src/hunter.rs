@@ -28,7 +28,7 @@ pub extern fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32)
                 hunter: Box::from_raw(rw_ptr as _),
                 runners: Box::from_raw(rw_ptr.add(std::mem::size_of::<Hunter>()) as _),
             }
-            );
+        );
     }
 }
 
