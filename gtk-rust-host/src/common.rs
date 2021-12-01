@@ -130,13 +130,11 @@ impl Drop for Buffers {
     fn drop(&mut self) {
         unsafe {
             if !self.shared_ro.is_null()
-                && libc::munmap(self.shared_ro, READ_ONLY_BUF_SIZE as usize) == -1
-            {
+                && libc::munmap(self.shared_ro, READ_ONLY_BUF_SIZE as usize) == -1 {
                 println!("munmap failed for shared_ro");
             }
             if !self.shared_rw.is_null()
-                && libc::munmap(self.shared_rw, READ_WRITE_BUF_SIZE as usize) == -1
-            {
+                && libc::munmap(self.shared_rw, READ_WRITE_BUF_SIZE as usize) == -1 {
                 println!("munmap failed for shared_rw");
             }
         }
