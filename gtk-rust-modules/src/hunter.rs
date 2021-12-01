@@ -44,7 +44,7 @@ pub extern fn malloc_(size: usize) -> cptr {
 pub extern fn init(rand_seed: i32) {
     let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
     let ctx: &mut Context = (guard.as_mut()).expect("ctx not initialized");
-    srand(rand_seed);
+    srand(rand_seed as usize);
     ctx.hunter.x = GRID_W / 2;
     ctx.hunter.y = GRID_H / 2;
 }
