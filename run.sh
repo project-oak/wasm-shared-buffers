@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-set -ex
+set -e
 
 BASE=$(dirname $(readlink -f $0))
 WAMR=$BASE/deps/wasm-micro-runtime
