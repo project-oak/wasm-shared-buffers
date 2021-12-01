@@ -46,7 +46,6 @@ pub struct Hunter {
 
 extern "C" {
     pub fn print_callback(len: usize, msg: *const u8); // len should be usize
-    // pub fn rand() -> i32;
 }
 
 static mut RAND_VALUE: usize = 0;
@@ -106,10 +105,6 @@ lazy_static! {
 }
 
 pub fn rand_step() -> i32 {
-    // let guard = CTX.lock().expect("Failed to aquire ctx lock");
-    // let ctx = *guard.as_ref().expect("ctx not initialized");
-    // let mut rng: ThreadRng = rand::thread_rng(); //TODO: Store this globally?
-    // (rng.gen::<i32>() % 3) - 1
     (rand().abs() % 3) - 1
 }
 
