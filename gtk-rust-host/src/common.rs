@@ -81,7 +81,6 @@ impl Buffers {
         let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
         let wasm_alloc_index = malloc(READ_ONLY_BUF_SIZE + READ_WRITE_BUF_SIZE + 3 * page_size as i32);
 
-
         let wasm_memory_base = get_wasm_memory_base();
 
         // Get the location of wasm's linear memory buffer in our address space.

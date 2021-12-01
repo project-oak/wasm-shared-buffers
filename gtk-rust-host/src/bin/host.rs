@@ -319,8 +319,8 @@ fn on_draw(ctx: Rc<RefCell<HostContext>>, _da: &gtk::DrawingArea, cr: &cairo::Co
     cr.rectangle(hunter.x as f64 * SCALE, hunter.y as f64 * SCALE, SCALE, SCALE);
     cr.fill().unwrap();
 
-    const HSCALE: f64 = SCALE / 2.0;
     const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
+    const HSCALE: f64 = SCALE / 2.0;
     for i in 0..N_RUNNERS {
         let (pos, state) = hc.actors.runner(i);
         match state {
