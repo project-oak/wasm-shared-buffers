@@ -14,7 +14,8 @@
 // limitations under the License.
 //
 
-use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter, GridType, Runner, N_RUNNERS, rand_usize, rand_step, rand};
+use common::println;
+use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter, GridType, Runner, N_RUNNERS, rand_usize, rand_step, rand, print_str};
 use common::shared::{cptr, State};
 
 const SCARE_DIST: i32 = 10;

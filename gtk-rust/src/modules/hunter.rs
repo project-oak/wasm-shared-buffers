@@ -14,7 +14,8 @@
 // limitations under the License.
 //
 
-use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter};
+use common::println;
+use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter, print_str};
 use common::shared::{cptr, State};
 
 #[no_mangle]
