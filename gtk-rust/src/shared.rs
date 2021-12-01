@@ -18,7 +18,7 @@
 pub enum State {
     Walking,
     Running,
-    Dead
+    Dead,
 }
 
 impl State {

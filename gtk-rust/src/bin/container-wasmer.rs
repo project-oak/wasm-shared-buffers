@@ -59,7 +59,7 @@ fn main() {
 }
 
 fn map_shared_buffers(instance: &Instance) -> Buffers {
-    let memory: Memory =  instance.exports.get("memory").unwrap();
+    let memory: Memory = instance.exports.get("memory").unwrap();
     let get_wasm_memory_base = || memory.view::<u8>().as_ptr() as i64;
 
     let malloc = |size: i32| -> i32 {
