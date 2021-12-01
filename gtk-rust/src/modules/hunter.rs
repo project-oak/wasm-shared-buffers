@@ -19,7 +19,7 @@ use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter
 use common::shared::{cptr, State};
 
 #[no_mangle]
-pub extern fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32) {
+pub extern "C" fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32) {
     let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
     let ctx = &mut (*guard);
     unsafe {
@@ -34,7 +34,7 @@ pub extern fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32)
 }
 
 #[no_mangle]
-pub extern fn malloc_(size: usize) -> cptr {
+pub extern "C" fn malloc_(size: usize) -> cptr {
     let vec: Vec<u8> = Vec::with_capacity(size);
     let ptr = vec.as_ptr();
     std::mem::forget(vec); // Leak the vector
@@ -42,7 +42,7 @@ pub extern fn malloc_(size: usize) -> cptr {
 }
 
 #[no_mangle]
-pub extern fn init(rand_seed: i32) {
+pub extern "C" fn init(rand_seed: i32) {
     let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
     let ctx: &mut Context = (guard.as_mut()).expect("ctx not initialized");
     srand(rand_seed as usize);
@@ -51,7 +51,7 @@ pub extern fn init(rand_seed: i32) {
 }
 
 #[no_mangle]
-pub extern fn tick() {
+pub extern "C" fn tick() {
     let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
     let ctx = (*guard).as_mut().expect("ctx not initialized");
     // Find the closest runner and move towards it.
@@ -75,7 +75,7 @@ pub extern fn tick() {
 }
 
 #[no_mangle]
-pub extern fn modify_grid() {
+pub extern "C" fn modify_grid() {
     println!("[h] Attempting to write to read-only memory...");
     let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
     let ctx = (*guard).as_mut().expect("ctx not initialized");
