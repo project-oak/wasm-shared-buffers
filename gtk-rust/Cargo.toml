@@ -1,0 +1,55 @@
+[package]
+name = "gtk-rust"
+version = "0.1.0"
+edition = "2018"
+default-run = "host"
+
+[features]
+modules = ["lazy_static"]
+host = [ "exec", "fork", "glib", "gtk", "libc", "rand", "wasmi", "wasmer-runtime"]
+
+[dependencies]
+exec = { version = "*", optional = true }
+fork = { version = "*", optional = true }
+glib = { version = "*", optional = true }
+gtk = { version = "*", package = "gtk4", optional = true}
+libc = { version = "*", optional = true }
+rand = { version = "*", optional = true }
+wasmi = { version = "*", optional = true }
+wasmer-runtime = { version = "*", optional = true }
+lazy_static = { version = "1.4.0", optional = true }
+# wee_alloc = { version = "0.4.5", optional = true }
+
+[lib]
+name = "common"
+path = "src/common.rs"
+
+[[bin]]
+name = "container-wasmer"
+path = "src/bin/container-wasmer.rs"
+required-features = ["host"]
+
+[[bin]]
+name = "container-wasmi"
+path = "src/bin/container-wasmi.rs"
+required-features = ["host"]
+
+[[bin]]
+name = "host"
+path = "src/bin/host.rs"
+required-features = ["host"]
+
+[[bin]]
+name = "runner"
+path = "src/modules/runner.rs"
+required-features = ["modules"]
+
+[[bin]]
+name = "hunter"
+path = "src/modules/hunter.rs"
+required-features = ["modules"]
+
+[profile.release]
+# opt-level="s" # for small code
+# panic = 'abort'
+# lto=true # for final release

@@ -20,12 +20,9 @@ set -e
 BASE=$(dirname $(readlink -f $0))
 WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
-
 RUST_WASM_TARGET="wasm32-unknown-unknown"
-# RUST_WASM_TARGET="wasm32-wasi"
-RUST_HOST="gtk-rust-host/Cargo.toml"
-RUST_MODULES="gtk-rust-modules/Cargo.toml"
-RUST_MODULES_OUT="gtk-rust-modules/target/${RUST_WASM_TARGET}/debug"
+RUST_CONFIG="gtk-rust/Cargo.toml"
+RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/debug"
 
 setup_deps() {
   mkdir -p deps
@@ -67,9 +64,6 @@ get_rust_tooling() {
   echo "Installing Wasm target for Rust"
   rustup target add "$RUST_WASM_TARGET"
 
-  echo "Installing Wasm support for Cargo"
-  cargo install cargo-wasi
-
   echo "Done"
 }
 
@@ -93,13 +87,7 @@ build_wasm_c() {
 }
 
 build_gtk_wasm_rust() {
-  # TODO: Remove this once cargo-wasi supports --manifest-path
-  (
-    cd gtk-rust-modules
-    # From go/rust+wasm
-    cargo build --target "$RUST_WASM_TARGET" --bin hunter # --manifest-path "$RUST_MODULES"
-    cargo build --target "$RUST_WASM_TARGET" --bin runner # --manifest-path "$RUST_MODULES"
-  )
+  cargo build --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
 }
 
 build_gtk_wasm_c() {
@@ -136,8 +124,8 @@ case "$1" in
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
     build_gtk_wasm_c
-    cargo build --manifest-path "$RUST_HOST"
-    cargo run --manifest-path "$RUST_HOST" gtk-c/hunter.wasm gtk-c/runner.wasm
+    cargo build --manifest-path "$RUST_CONFIG" --features host
+    cargo run --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
     ;;
 
   gcr) # C-based GTK demo with Rust wasm modules
@@ -149,11 +137,11 @@ case "$1" in
     # run "../${RUST_MODULES_OUT}/runner.wasm" "../${RUST_MODULES_OUT}/hunter.wasm"
     ;;
 
-  gr) # Rust-based GTK demo; uses wasm modules from gtk-rus-hostt
+  gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
     setup_deps
     build_gtk_wasm_rust
-    cargo build --manifest-path "$RUST_HOST"
-    ./gtk-rust-host/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
+    cargo build --manifest-path "$RUST_CONFIG" --features host
+    ./gtk-rust/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
   t) # Terminal-based tests (in C)
@@ -171,8 +159,7 @@ case "$1" in
 
   clean)
     rm -vf {gtk-*,terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
-    cargo clean --manifest-path "$RUST_HOST"
-    cargo clean --manifest-path "$RUST_MODULES"
+    ( cd gtk-rust && cargo clean )
     ;;
 
   *)  echo "Usage: gc | gr | grc | gcr | t | i | clean"

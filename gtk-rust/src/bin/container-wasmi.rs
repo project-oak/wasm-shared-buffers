@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-use common::*;
+use common::host_common::*;
 use std::{cell::RefCell, env, fs, io::prelude::*, process};
 use wasmi::RuntimeValue::I32;
 

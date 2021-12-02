@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-use common::*;
+use common::host_common::{Buffers, Comms, Signal};
 use std::{env, fs, io::prelude::*, process};
 use wasmer_runtime::{Array, Ctx, func, Func, imports, Instance, instantiate, Memory, WasmPtr};
 
@@ -59,7 +59,7 @@ fn main() {
 }
 
 fn map_shared_buffers(instance: &Instance) -> Buffers {
-    let memory: Memory =  instance.exports.get("memory").unwrap();
+    let memory: Memory = instance.exports.get("memory").unwrap();
     let get_wasm_memory_base = || memory.view::<u8>().as_ptr() as i64;
 
     let malloc = |size: i32| -> i32 {

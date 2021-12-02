@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-use common::*;
+use common::shared::{cptr, State};
+use common::host_common::{Signal, READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE, READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE, HUNTER_SIGNAL_INDEX, RUNNER_SIGNAL_INDEX, GRID_H, GRID_W, N_BLOCKS, SCALE, N_RUNNERS, TICK_MS, SIGNAL_WAIT, SIGNAL_REPS};
 use fork::{fork, Fork};
 use gtk::{cairo, gio, prelude::*};
 use libc::{MAP_SHARED, O_CREAT, O_RDWR, O_TRUNC, PROT_READ, PROT_WRITE, S_IRUSR, S_IWUSR};
@@ -52,8 +53,9 @@ impl HostContext<'_> {
     fn new(hunter_path: &str, runner_path: &str) -> Self {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
-        fork_container("gtk-rust-host/target/debug/container-wasmi", hunter_path, HUNTER_SIGNAL_INDEX);
-        fork_container("gtk-rust-host/target/debug/container-wasmer", runner_path, RUNNER_SIGNAL_INDEX);
+        // TODO: Use own path to find the other binaries
+        fork_container("gtk-rust/target/debug/container-wasmi", hunter_path, HUNTER_SIGNAL_INDEX);
+        fork_container("gtk-rust/target/debug/container-wasmer", runner_path, RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
         let mut ctx = Self {
@@ -231,20 +233,6 @@ impl Actors<'_> {
 struct Position {
     x: i32,
     y: i32,
-}
-
-#[derive(Copy, Clone, PartialEq)]
-enum State {
-    Walking,
-    Running,
-    Dead,
-}
-
-impl State {
-    pub fn from(value: i32) -> Self {
-        assert!((0..3).contains(&value));
-        [Self::Walking, Self::Running, Self::Dead][value as usize]
-    }
 }
 
 fn on_open(ctx: Rc<RefCell<HostContext<'static>>>, app: &gtk::Application) {

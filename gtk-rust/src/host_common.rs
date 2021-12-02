@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+
+use super::shared::cptr;
 use libc::{MAP_FIXED, MAP_SHARED, O_RDONLY, O_RDWR, PROT_READ, PROT_WRITE, S_IRUSR, S_IWUSR};
 use std::{ffi::CString, slice, thread, time::Duration};
 
@@ -39,9 +41,6 @@ pub const N_RUNNERS: i32 = 15;
 // GUI settings.
 pub const SCALE: f64 = 20.0;
 pub const TICK_MS: u64 = 150;
-
-#[allow(non_camel_case_types)]
-pub type cptr = *mut core::ffi::c_void;
 
 // -- Definitions for both host and containers --
 
