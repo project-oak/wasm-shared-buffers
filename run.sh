@@ -17,19 +17,6 @@
 
 set -e
 
-BASE=$(dirname $(readlink -f $0))
-CMD=$1
-if [ -z $2 ]; then
-  MODE="debug"
-else
-  MODE="release"
-fi
-WAMR=$BASE/deps/wasm-micro-runtime
-EMSDK=$BASE/deps/emsdk
-RUST_WASM_TARGET="wasm32-unknown-unknown"
-RUST_CONFIG="gtk-rust/Cargo.toml"
-RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/${MODE}"
-
 setup_deps() {
   mkdir -p deps
   cd deps
@@ -93,7 +80,7 @@ build_wasm_c() {
 }
 
 build_gtk_wasm_rust() {
-  cargo build "--${MODE}" --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
+  cargo build $MODE_FLAG --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
 }
 
 build_gtk_wasm_c() {
@@ -118,6 +105,29 @@ run() {
   ./host "$@"
 }
 
+# Handle the command line arguments
+MODE="debug"
+MODE_FLAG=""
+for i in "$@"; do
+  case $i in
+    -r)
+      MODE="release"
+      MODE_FLAG="--release"
+      shift
+      ;;
+    *)
+      CMD="$i"
+      ;;
+  esac
+done
+
+BASE=$(dirname $(readlink -f $0))
+WAMR=$BASE/deps/wasm-micro-runtime
+EMSDK=$BASE/deps/emsdk
+RUST_WASM_TARGET="wasm32-unknown-unknown"
+RUST_CONFIG="gtk-rust/Cargo.toml"
+RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/${MODE}"
+
 case "$CMD" in
   gc) # C-based GTK demo
     setup_deps
@@ -130,8 +140,8 @@ case "$CMD" in
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
     build_gtk_wasm_c
-    cargo build "--${MODE}" --manifest-path "$RUST_CONFIG" --features host
-    cargo run "--${MODE}" --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
+    cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
+    cargo run $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
     ;;
 
   gcr) # C-based GTK demo with Rust wasm modules
@@ -146,7 +156,7 @@ case "$CMD" in
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
     setup_deps
     build_gtk_wasm_rust
-    cargo build "--${MODE}" --manifest-path "$RUST_CONFIG" --features host
+    cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
     ./gtk-rust/target/${MODE}/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
