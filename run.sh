@@ -178,7 +178,7 @@ case "$CMD" in
     ( cd gtk-rust && cargo clean )
     ;;
 
-  *)  echo "Usage: gc | gr | grc | gcr | t | i | clean [r]"
+  *)  echo "Usage: ./run.sh [-r] (gc | gr | grc | gcr | t | i | clean)"
       echo "  gc: GTK demo in C"
       echo "  gr: GTK demo in Rust"
       echo "  grc: GTK demo with Rust host and C wasm modules"
@@ -186,5 +186,5 @@ case "$CMD" in
       echo "  t: terminal-only tests"
       echo "  i: install dependencies"
       echo "  clean: cleans up build artifacts"
-      echo "  r: use release mode for rust"
+      echo "  -r: use release mode for rust"
 esac
