@@ -1,6 +1,9 @@
 deps
+target
+host
+container
+container-*
 *.wasm
 *.wat
-container
-host
-target
+*.out
+*.png

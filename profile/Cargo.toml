@@ -1,0 +1,30 @@
+[package]
+name = "gtk-rust"
+version = "0.1.0"
+edition = "2018"
+
+[features]
+container = ["wasmi", "wasmer-runtime"]
+
+[dependencies]
+wasmi = { version = "*", optional = true }
+wasmer-runtime = { version = "*", optional = true }
+
+[[bin]]
+name = "container-wasmer"
+path = "src-rust/container-wasmer.rs"
+required-features = ["container"]
+
+[[bin]]
+name = "container-wasmi"
+path = "src-rust/container-wasmi.rs"
+required-features = ["container"]
+
+[[bin]]
+name = "module-rust"
+path = "src-rust/module-rust.rs"
+
+[profile.release]
+opt-level = "s"
+panic = 'abort'
+lto = true

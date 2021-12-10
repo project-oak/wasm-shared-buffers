@@ -1,0 +1,29 @@
+set term pngcairo
+
+set output 'resident-memory.png'
+set terminal png size 640, 480
+set title 'Resident Memory (Mb)'
+set key top left
+
+plot 'wamr-c.out'      using 2 with lines lw 2 title 'wamr c', \
+     'wasmer-c.out'    using 2 with lines lw 2 title 'wasmer c', \
+     'wasmi-c.out'     using 2 with lines lw 2 title 'wasmi c', \
+     'wamr-rust.out'   using 2 with lines lw 2 title 'wamr rust', \
+     'wasmer-rust.out' using 2 with lines lw 2 title 'wasmer rust', \
+     'wasmi-rust.out'  using 2 with lines lw 2 title 'wasmi rust'
+
+set output 'virtual-memory.png'
+set terminal png size 1280, 480
+unset title
+set multiplot layout 1, 2 title 'Virtual Memory (Mb)'
+
+plot 'wamr-c.out'      using 1 with lines lw 2 title 'wamr c', \
+     'wasmer-c.out'    using 1 with lines lw 2 title 'wasmer c', \
+     'wasmi-c.out'     using 1 with lines lw 2 title 'wasmi c', \
+     'wamr-rust.out'   using 1 with lines lw 2 title 'wamr rust', \
+     'wasmer-rust.out' using 1 with lines lw 2 title 'wasmer rust', \
+     'wasmi-rust.out'  using 1 with lines lw 2 title 'wasmi rust'
+
+set yrange [0:700]
+set key center right
+replot
