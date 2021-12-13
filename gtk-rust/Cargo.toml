@@ -50,6 +50,6 @@ path = "src/modules/hunter.rs"
 required-features = ["modules"]
 
 [profile.release]
-# opt-level="s" # for small code
-# panic = 'abort'
-# lto=true # for final release
+opt-level="s" # for small code
+panic = 'abort'
+lto=true # for final release

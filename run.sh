@@ -17,13 +17,6 @@
 
 set -e
 
-BASE=$(dirname $(readlink -f $0))
-WAMR=$BASE/deps/wasm-micro-runtime
-EMSDK=$BASE/deps/emsdk
-RUST_WASM_TARGET="wasm32-unknown-unknown"
-RUST_CONFIG="gtk-rust/Cargo.toml"
-RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/debug"
-
 setup_deps() {
   mkdir -p deps
   cd deps
@@ -87,7 +80,7 @@ build_wasm_c() {
 }
 
 build_gtk_wasm_rust() {
-  cargo build --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
+  cargo build $MODE_FLAG --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
 }
 
 build_gtk_wasm_c() {
@@ -112,7 +105,30 @@ run() {
   ./host "$@"
 }
 
-case "$1" in
+# Handle the command line arguments
+MODE="debug"
+MODE_FLAG=""
+for i in "$@"; do
+  case $i in
+    -r)
+      MODE="release"
+      MODE_FLAG="--release"
+      shift
+      ;;
+    *)
+      CMD="$i"
+      ;;
+  esac
+done
+
+BASE=$(dirname $(readlink -f $0))
+WAMR=$BASE/deps/wasm-micro-runtime
+EMSDK=$BASE/deps/emsdk
+RUST_WASM_TARGET="wasm32-unknown-unknown"
+RUST_CONFIG="gtk-rust/Cargo.toml"
+RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/${MODE}"
+
+case "$CMD" in
   gc) # C-based GTK demo
     setup_deps
     build_gtk_wasm_c
@@ -124,8 +140,8 @@ case "$1" in
   grc) # Rust-based GTK demo; uses wasm modules from gtk-c
     setup_deps
     build_gtk_wasm_c
-    cargo build --manifest-path "$RUST_CONFIG" --features host
-    cargo run --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
+    cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
+    cargo run $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
     ;;
 
   gcr) # C-based GTK demo with Rust wasm modules
@@ -140,8 +156,8 @@ case "$1" in
   gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
     setup_deps
     build_gtk_wasm_rust
-    cargo build --manifest-path "$RUST_CONFIG" --features host
-    ./gtk-rust/target/debug/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
+    cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
+    ./gtk-rust/target/${MODE}/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
   t) # Terminal-based tests (in C)
@@ -162,7 +178,7 @@ case "$1" in
     ( cd gtk-rust && cargo clean )
     ;;
 
-  *)  echo "Usage: gc | gr | grc | gcr | t | i | clean"
+  *)  echo "Usage: ./run.sh [-r] (gc | gr | grc | gcr | t | i | clean)"
       echo "  gc: GTK demo in C"
       echo "  gr: GTK demo in Rust"
       echo "  grc: GTK demo with Rust host and C wasm modules"
@@ -170,4 +186,5 @@ case "$1" in
       echo "  t: terminal-only tests"
       echo "  i: install dependencies"
       echo "  clean: cleans up build artifacts"
+      echo "  -r: use release mode for rust"
 esac
