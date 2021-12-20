@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+use common::host_common::*;
 use common::shared::{cptr, State};
-use common::host_common::{Signal, READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE, READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE, HUNTER_SIGNAL_INDEX, RUNNER_SIGNAL_INDEX, GRID_H, GRID_W, N_BLOCKS, SCALE, N_RUNNERS, TICK_MS, SIGNAL_WAIT, SIGNAL_REPS};
 use fork::{fork, Fork};
 use gtk::{cairo, gio, prelude::*};
 use libc::{MAP_SHARED, O_CREAT, O_RDWR, O_TRUNC, PROT_READ, PROT_WRITE, S_IRUSR, S_IWUSR};
@@ -23,6 +23,8 @@ use std::{cell::RefCell, ffi::CString, process, rc::Rc, slice, thread, time::Dur
 
 fn main() {
     println!("Host started; pid {}", process::id());
+    assert_eq!(PAGE_SIZE, unsafe { libc::sysconf(libc::_SC_PAGESIZE) });
+
     let hunter_path = std::env::args().nth(1).expect("missing hunter module path arg");
     let runner_path = std::env::args().nth(2).expect("missing runner module path arg");
     let ctx = Rc::new(RefCell::new(HostContext::new(&hunter_path, &runner_path)));
@@ -54,8 +56,8 @@ impl HostContext<'_> {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
         // TODO: Use own path to find the other binaries
-        fork_container("gtk-rust/target/debug/container-wasmi", hunter_path, HUNTER_SIGNAL_INDEX);
-        fork_container("gtk-rust/target/debug/container-wasmer", runner_path, RUNNER_SIGNAL_INDEX);
+        fork_container("gtk-rust/target/debug/container-wasmer", hunter_path, HUNTER_SIGNAL_INDEX);
+        fork_container("gtk-rust/target/debug/container-wasmi", runner_path, RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
         let mut ctx = Self {
@@ -120,11 +122,11 @@ fn create_shared_buffer(name: &str, size: i32) -> cptr {
     }
 }
 
-fn fork_container(binary: &str, module: &str, signal_index: usize) {
+fn fork_container(binary: &str, module: &str, index: usize) {
     match fork() {
         Ok(Fork::Parent(_)) => (),
         Ok(Fork::Child) => {
-            let err = exec::execvp(binary, &[binary, module, &signal_index.to_string()]);
+            let err = exec::execvp(binary, &[binary, module, &index.to_string()]);
             panic!("exec failed: {}", err); // should not be reached
         }
         Err(_) => panic!("fork failed"),
@@ -186,14 +188,18 @@ fn rand_range(a: i32, b: i32) -> i32 {
 // Wraps the (unowned) read-write buffer to provide access to the hunter and runner
 // data and to manage communication between the host and container processes.
 struct Actors<'a> {
-    // Layout: [sig0, sig1, hx, hy, r0x, r0y, r0s, r1x, r1y, r1s, ...]
+    // Layout: [sig, hx, hy, r0x, r0y, r0s, r1x, r1y, r1s, ...]
     data: &'a mut [i32],
+    hunter_signal: *mut u8,
+    runner_signal: *mut u8,
 }
 
 impl Actors<'_> {
     fn new(shared_rw: cptr, len: i32) -> Self {
         Self {
             data: unsafe { slice::from_raw_parts_mut(shared_rw as *mut i32, len as usize) },
+            hunter_signal: unsafe { shared_rw.add(HUNTER_SIGNAL_INDEX) as *mut u8 },
+            runner_signal: unsafe { shared_rw.add(RUNNER_SIGNAL_INDEX) as *mut u8 },
         }
     }
 
@@ -201,12 +207,12 @@ impl Actors<'_> {
     // to non-zero and the containers always move from non-zero to zero. Each container has a
     // dedicated i32 value in the read-write buffer.
     fn send_signal(&mut self, signal: Signal, wait_for_idle: bool) {
-        self.data[HUNTER_SIGNAL_INDEX] = signal as i32;
-        self.data[RUNNER_SIGNAL_INDEX] = signal as i32;
+        unsafe { *self.hunter_signal = signal as u8 };
+        unsafe { *self.runner_signal = signal as u8 };
         if wait_for_idle {
-            let idle = Signal::Idle as i32;
+            let idle = Signal::Idle as u8;
             for _ in 0..SIGNAL_REPS {
-                if self.data[HUNTER_SIGNAL_INDEX] == idle && self.data[RUNNER_SIGNAL_INDEX] == idle {
+                if unsafe { *self.hunter_signal == idle && *self.runner_signal == idle } {
                     return;
                 }
                 thread::sleep(Duration::from_millis(SIGNAL_WAIT));
@@ -216,13 +222,13 @@ impl Actors<'_> {
     }
 
     fn hunter(&self) -> Position {
-        // Hunter co-ords are after the 2 * i32 signal values.
-        Position { x: self.data[2], y: self.data[3] }
+        // Hunter co-ords are after the i32 signal value.
+        Position { x: self.data[1], y: self.data[2] }
     }
 
     fn runner(&self, index: i32) -> (Position, State) {
-        // Runners start after 2 * i32 signal values + 2 * i32 hunter co-ords.
-        let i = 4 + 3 * index as usize;
+        // Runners start after i32 signal value + 2 * i32 hunter co-ords.
+        let i = 3 + 3 * index as usize;
         (
             Position { x: self.data[i], y: self.data[i + 1] },
             State::from(self.data[i + 2]),
@@ -267,9 +273,18 @@ fn on_open(ctx: Rc<RefCell<HostContext<'static>>>, app: &gtk::Application) {
         });
     }
 
+    let large_alloc_btn = gtk::Button::with_label("Request large alloc (wasmi)");
+    {
+        let ctx = ctx.clone();
+        large_alloc_btn.connect_clicked(move |_btn| {
+            ctx.borrow_mut().actors.send_signal(Signal::LargeAlloc, true)
+        });
+    }
+
     let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     hbox.append(&host_modify_btn);
     hbox.append(&container_modify_btn);
+    hbox.append(&large_alloc_btn);
 
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 10);
     vbox.append(&drawing_area);

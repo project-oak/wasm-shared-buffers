@@ -14,128 +14,144 @@
 // limitations under the License.
 //
 use common::host_common::*;
-use std::{cell::RefCell, env, fs, io::prelude::*, process};
-use wasmi::RuntimeValue::I32;
+use std::{env, fs, io::prelude::*, process};
+use wasmi::{
+    Externals, FuncInstance, FuncRef, ImportsBuilder, MemoryRef, Module, ModuleImportResolver,
+    ModuleInstance, RuntimeArgs, RuntimeValue, RuntimeValue::I32, Signature, Trap,
+};
 
 fn main() {
     let module_name = env::args().nth(1).expect("missing module name arg");
-    let signal_index = env::args().nth(2).expect("missing signal index arg");
-    println!("Container {} started (wasmi); module '{}', pid {}", signal_index, module_name, process::id());
+    let index = env::args().nth(2).expect("missing index arg");
+    println!("Container {} started (wasmi); module '{}', pid {}", index, module_name, process::id());
 
     // Load and instantiate the wasm module.
-    let mut bytes = Vec::new();
-    fs::File::open(module_name).unwrap().read_to_end(&mut bytes).unwrap();
-    let module = wasmi::Module::from_buffer(&bytes).expect("failed to load wasm");
+    let instance = {
+        let mut bytes = Vec::new();
+        fs::File::open(module_name).unwrap().read_to_end(&mut bytes).unwrap();
+        let module = Module::from_buffer(&bytes).expect("failed to load wasm");
+        let imports = ImportsBuilder::new().with_resolver("env", &Resolver);
+        ModuleInstance::new(&module, &imports)
+            .expect("failed to instantiate wasm module")
+            .assert_no_start()
+    };
 
-    let mut ctx = Context::new();
-    let imports = wasmi::ImportsBuilder::new().with_resolver("env", &ctx);
-    let instance = wasmi::ModuleInstance::new(&module, &imports)
-        .expect("failed to instantiate wasm module")
-        .assert_no_start();
+    // Set up our shared memory buffers and create the wasm module's context object.
+    let w = map_shared_buffers(&instance, index.parse().unwrap());
 
-    // Extract the linear memory object.
+    // Command loop.
+    loop {
+        let signal = w.buffers.wait_for_signal();
+
+        // Version 0.10.0 of wasmi changed to using a 4Gb pre-allocation for the linear buffer,
+        // so resize ops just cause an update to the available length rather than a full realloc.
+        // That means we don't need to remap our shared buffers, but as a precaution make sure
+        // the wasm memory's base address is stable.
+        if w.wasm_memory_base != get_wasm_memory_base(&instance) {
+            println!("Container {}: linear buffer memory address changed!", index);
+            break;
+        }
+
+        match signal {
+            Signal::Idle => panic!("unexpected idle signal"),
+            Signal::Init => wasm_call(&instance, "init", &[w.wasm_context, I32(rand::random::<i32>())]),
+            Signal::Tick => wasm_call(&instance, "tick", &[w.wasm_context]),
+            Signal::LargeAlloc => wasm_call(&instance, "large_alloc", &[w.wasm_context]),
+            Signal::ModifyGrid => wasm_call(&instance, "modify_grid", &[w.wasm_context]),
+            Signal::Exit => break,
+        };
+        w.buffers.send_idle();
+    }
+    println!("Container {} stopping", index);
+}
+
+struct Wrapper {
+    buffers: Buffers,
+    wasm_context: RuntimeValue,
+    wasm_memory_base: i64,
+}
+
+fn map_shared_buffers(instance: &ModuleInstance, index: usize) -> Wrapper {
+    // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
+    let wasm_alloc_res = wasm_call(instance, "malloc_", &[I32(WASM_ALLOC_SIZE)])
+        .expect("no value returned from malloc_");
+    let wasm_alloc_index = match wasm_alloc_res {
+        I32(v) => v,
+        _ => panic!("invalid value type returned from malloc_"),
+    };
+
+    // Get the location of wasm's linear memory buffer in our address space.
+    let wasm_memory_base = get_wasm_memory_base(instance);
+    let wasm_alloc_ptr = wasm_memory_base + wasm_alloc_index as i64;
+
+    // Align the shared buffers inside wasm's linear memory against our page boundaries.
+    let aligned_ro_ptr = page_align(wasm_alloc_ptr);
+    let aligned_rw_ptr = page_align(aligned_ro_ptr + READ_ONLY_BUF_SIZE as i64);
+
+    // Map the buffers into the aligned locations.
+    let shared_ro = map_buffer(aligned_ro_ptr, READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE, true);
+    let shared_rw = map_buffer(aligned_rw_ptr, READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE, false);
+    assert_eq!(shared_ro as i64, aligned_ro_ptr);
+    assert_eq!(shared_rw as i64, aligned_rw_ptr);
+    let buffers = Buffers::new(shared_ro, shared_rw, index);
+
+    // Convert the aligned buffer locations into wasm linear memory indexes.
+    // We want to skip the signal bytes when passing the r/w buffer into the wasm instance.
+    let ro_index = (shared_ro as i64 - wasm_memory_base) as i32;
+    let rw_index = (shared_rw as i64 - wasm_memory_base) as i32 + SIGNAL_BYTES;
+    let wasm_context = wasm_call(instance, "create_context", &[I32(ro_index), I32(rw_index)])
+        .expect("create_context should return a context pointer");
+
+    Wrapper { buffers, wasm_context, wasm_memory_base }
+}
+
+fn wasm_call(instance: &ModuleInstance, name: &str, args: &[RuntimeValue]) -> Option<RuntimeValue> {
+    let mut externs = Externs { memory: get_linear_memory(instance) };
+    instance
+        .invoke_export(name, args, &mut externs)
+        .unwrap_or_else(|_| panic!("wasm call '{}' failed", name))
+}
+
+fn get_wasm_memory_base(instance: &ModuleInstance) -> i64 {
+    get_linear_memory(instance).with_direct_access(|buf| buf.as_ptr() as i64)
+}
+
+fn get_linear_memory(instance: &ModuleInstance) -> MemoryRef {
     let mem_extern = instance
         .export_by_name("memory")
         .expect("module does not export memory");
-    ctx.memory_ref.replace(mem_extern.as_memory().unwrap().clone());
-
-    // Set up our shared memory buffers.
-    ctx.map_shared_buffers(&instance);
-
-    // Command loop. Comms does *not* take ownership of shared_rw.
-    let mut comms = Comms::new(ctx.buffers().shared_rw, signal_index.parse().unwrap());
-    loop {
-        match comms.wait_for_signal() {
-            Signal::Idle => panic!("unexpected idle signal"),
-            Signal::Init => ctx.wasm_call(&instance, "init", &[I32(rand::random::<i32>())]),
-            Signal::Tick => ctx.wasm_call(&instance, "tick", &[]),
-            Signal::ModifyGrid => ctx.wasm_call(&instance, "modify_grid", &[]),
-            Signal::Exit => break,
-        };
-        comms.send_idle();
-    }
-    println!("Container {} stopping", signal_index);
+    mem_extern.as_memory().unwrap().clone()
 }
 
-struct Context {
-    memory_ref: Option<wasmi::MemoryRef>,
-    buffers_ref: Option<Buffers>,
+const PRINT_CALLBACK: usize = 0;
+
+struct Externs {
+    memory: MemoryRef,
 }
 
-impl Context {
-    const PRINT_CALLBACK: usize = 0;
-
-    fn new() -> Self {
-        Self {
-            memory_ref: None,
-            buffers_ref: None,
-        }
-    }
-
-    fn memory(&self) -> &wasmi::MemoryRef {
-        self.memory_ref.as_ref().unwrap()
-    }
-
-    fn buffers(&self) -> &Buffers {
-        self.buffers_ref.as_ref().unwrap()
-    }
-
-    fn wasm_call(&mut self, instance: &wasmi::ModuleRef, name: &str, args: &[wasmi::RuntimeValue]) {
-        instance
-            .invoke_export(name, args, self)
-            .unwrap_or_else(|_| panic!("wasm call '{}' failed", name));
-    }
-
-    fn map_shared_buffers(&mut self, instance: &wasmi::ModuleRef) {
-        let cell = RefCell::new(self);
-
-        let get_memory_base = || -> i64 {
-            cell.borrow().memory().with_direct_access(|buf| buf.as_ptr() as i64)
-        };
-
-        let malloc = |size: i32| -> i32 {
-            let wasm_alloc_res = instance.invoke_export("malloc_", &[I32(size)], *cell.borrow_mut())
-                .expect("malloc_ failed")
-                .expect("no value returned from malloc_");
-            match wasm_alloc_res {
-                I32(v) => v,
-                _ => panic!("invalid value type returned from malloc_"),
+impl Externals for Externs {
+    fn invoke_index(&mut self, index: usize, args: RuntimeArgs) -> Result<Option<RuntimeValue>, Trap> {
+        match index {
+            PRINT_CALLBACK => {
+                let len = args.nth::<i32>(0) as usize;
+                let ptr = args.nth::<u32>(1);
+                let mut buf = vec![0; len];
+                self.memory.get_into(ptr, &mut buf[..]).unwrap();
+                print!("{}", String::from_utf8(buf).unwrap());
+                Ok(None)
             }
-        };
-
-        let set_shared = |ro_index:i32, ro_size:i32, rw_index:i32, rw_size: i32| {
-            instance.invoke_export(
-                "set_shared",
-                &[I32(ro_index), I32(ro_size), I32(rw_index), I32(rw_size)],
-                *cell.borrow_mut()
-            ).expect("set_shared failed");
-        };
-
-        let buffers = Buffers::new(get_memory_base, malloc, set_shared);
-        cell.borrow_mut().buffers_ref.replace(buffers);
-    }
-}
-
-impl wasmi::Externals for Context {
-    fn invoke_index(&mut self, index: usize, args: wasmi::RuntimeArgs) -> Result<Option<wasmi::RuntimeValue>, wasmi::Trap> {
-        if index == Self::PRINT_CALLBACK {
-            let len = args.nth::<i32>(0) as usize;
-            let ptr = args.nth::<u32>(1);
-            let buf = self.memory().get(ptr, len).unwrap();
-            print!("{}", String::from_utf8(buf).unwrap());
-            Ok(None)
-        } else {
-            panic!("unimplemented function at {}", index);
+            _ => panic!("unimplemented function at {}", index),
         }
     }
 }
 
-impl wasmi::ModuleImportResolver for Context {
-    fn resolve_func(&self, field_name: &str, signature: &wasmi::Signature) -> Result<wasmi::FuncRef, wasmi::Error> {
-        if field_name == "print_callback" {
-            Ok(wasmi::FuncInstance::alloc_host(signature.clone(), Self::PRINT_CALLBACK))
-        } else {
-            panic!("unexpected export {}", field_name);
+struct Resolver;
+
+impl ModuleImportResolver for Resolver {
+    fn resolve_func(&self, field_name: &str, signature: &Signature) -> Result<FuncRef, wasmi::Error> {
+        match field_name {
+            "print_callback" => Ok(FuncInstance::alloc_host(signature.clone(), PRINT_CALLBACK)),
+            _ => panic!("unexpected export {}", field_name),
         }
     }
 }

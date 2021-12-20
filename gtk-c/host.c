@@ -220,10 +220,6 @@ static void container_modify(GtkWidget *button, gpointer data) {
   send(CMD_MODIFY_GRID);
 }
 
-static void app_close(GtkWidget *button, gpointer data) {
-  g_application_quit(G_APPLICATION(data));
-}
-
 static void on_open(GtkApplication *app, gpointer data) {
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "WebAssembly shared buffers [C]");
@@ -239,13 +235,9 @@ static void on_open(GtkApplication *app, gpointer data) {
   GtkWidget *container_modify_btn = gtk_button_new_with_label("Container modifies grid");
   g_signal_connect(container_modify_btn, "clicked", G_CALLBACK(container_modify), NULL);
 
-  GtkWidget *close_btn = gtk_button_new_with_label("Close");
-  g_signal_connect(close_btn, "clicked", G_CALLBACK(app_close), app);
-
   GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
   gtk_box_append(GTK_BOX(hbox), host_modify_btn);
   gtk_box_append(GTK_BOX(hbox), container_modify_btn);
-  gtk_box_append(GTK_BOX(hbox), close_btn);
 
   GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
   gtk_box_append(GTK_BOX(vbox), drawing_area);

@@ -175,7 +175,7 @@ case "$CMD" in
 
   clean)
     rm -vf {gtk-*,terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
-    ( cd gtk-rust && cargo clean )
+    ( cd gtk-rust && cargo clean -v )
     ;;
 
   *)  echo "Usage: ./run.sh [-r] (gc | gr | grc | gcr | t | i | clean)"

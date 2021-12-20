@@ -16,27 +16,37 @@
 
 // Imported via `use` in hunter.rs and runner.rs
 
-use super::shared::State;
-use std::sync::{Arc, Mutex};
+use super::shared::{cptr, State};
 
 // Grid setup.
 pub const GRID_W: usize = 50;
 pub const GRID_H: usize = 30;
 pub const N_RUNNERS: usize = 15;
 
-pub struct Runner {
-    pub x: usize,
-    pub y: usize,
-    pub state: State,
-}
-
-pub struct Hunter {
-    pub x: usize,
-    pub y: usize,
-}
-
 extern "C" {
-    pub fn print_callback(len: usize, msg: *const u8); // len should be usize
+    pub fn print_callback(len: usize, msg: *const u8);
+}
+
+pub fn print_str(s: &str) {
+    unsafe {
+        print_callback(s.len(), s.as_ptr());
+    }
+}
+
+#[macro_export]
+macro_rules! print {
+    ($fmt:expr $(, $value:expr)* ) => {
+        let s = format!($fmt $(, $value)*);
+        print_str(&s);
+    };
+}
+
+#[macro_export]
+macro_rules! println {
+    ($fmt:expr $(, $value:expr)* ) => {
+        let s = format!($fmt $(, $value)*) + "\n";
+        print_str(&s);
+    };
 }
 
 static mut RAND_VALUE: usize = 0;
@@ -60,39 +70,48 @@ pub fn rand_usize() -> usize {
     }
 }
 
-pub fn print_str(s: &str) {
-    unsafe {
-        print_callback(s.len(), s.as_ptr());
-    }
+pub struct Runner {
+    pub x: usize,
+    pub y: usize,
+    pub state: State,
 }
 
-#[macro_export]
-macro_rules! print {
-    ($fmt:expr $(, $value:expr)* ) => {
-        let s = format!($fmt $(, $value)*);
-        print_str(&s);
-    };
-}
-
-#[macro_export]
-macro_rules! println {
-    ($fmt:expr $(, $value:expr)* ) => {
-        let s = format!($fmt $(, $value)*)+"\n";
-        print_str(&s);
-    };
+pub struct Hunter {
+    pub x: usize,
+    pub y: usize,
 }
 
 pub type GridType = [[i32; GRID_W]; GRID_H];
+pub type RunnersType = [Runner; N_RUNNERS];
 
 pub struct Context {
-    pub grid: Box<GridType>,
-    pub hunter: Box<Hunter>,
-    pub runners: Box<[Runner; N_RUNNERS]>,
+    pub grid: &'static mut GridType,
+    pub hunter: &'static mut Hunter,
+    pub runners: &'static mut RunnersType,
 }
 
-use lazy_static::lazy_static;
-lazy_static! {
-    pub static ref CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
+impl Context {
+    pub fn new_unowned(ro_ptr: cptr, rw_ptr: cptr) -> *mut Self {
+        Box::into_raw(Box::new(unsafe {
+            Context {
+                grid: &mut *(ro_ptr as *mut GridType),
+                hunter: &mut *(rw_ptr as *mut Hunter),
+                runners: &mut *(skip_hunter(rw_ptr) as *mut RunnersType),
+            }
+        }))
+    }
+
+    pub fn update(&mut self, ro_ptr: cptr, rw_ptr: cptr) {
+        unsafe {
+            self.grid = &mut *(ro_ptr as *mut GridType);
+            self.hunter = &mut *(rw_ptr as *mut Hunter);
+            self.runners = &mut *(skip_hunter(rw_ptr) as *mut RunnersType);
+        }
+    }
+}
+
+fn skip_hunter(ptr: cptr) -> cptr {
+    unsafe { ptr.add(std::mem::size_of::<Hunter>()) }
 }
 
 pub fn rand_step() -> i32 {

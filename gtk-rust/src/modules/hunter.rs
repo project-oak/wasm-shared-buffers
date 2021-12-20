@@ -14,24 +14,9 @@
 // limitations under the License.
 //
 
+use common::module_common::{move_by, print_str, srand, Context, GRID_H, GRID_W};
 use common::println;
-use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter, print_str};
 use common::shared::{cptr, State};
-
-#[no_mangle]
-pub extern "C" fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32) {
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = &mut (*guard);
-    unsafe {
-        ctx.replace(
-            Context {
-                grid: Box::from_raw(ro_ptr as _),
-                hunter: Box::from_raw(rw_ptr as _),
-                runners: Box::from_raw(rw_ptr.add(std::mem::size_of::<Hunter>()) as _),
-            }
-        );
-    }
-}
 
 #[no_mangle]
 pub extern "C" fn malloc_(size: usize) -> cptr {
@@ -42,18 +27,24 @@ pub extern "C" fn malloc_(size: usize) -> cptr {
 }
 
 #[no_mangle]
-pub extern "C" fn init(rand_seed: i32) {
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx: &mut Context = (guard.as_mut()).expect("ctx not initialized");
+pub extern "C" fn create_context(ro_ptr: cptr, rw_ptr: cptr) -> *const Context {
+    Context::new_unowned(ro_ptr, rw_ptr)
+}
+
+#[no_mangle]
+pub extern "C" fn update_context(ctx: &mut Context, ro_ptr: cptr, rw_ptr: cptr) {
+    ctx.update(ro_ptr, rw_ptr);
+}
+
+#[no_mangle]
+pub extern "C" fn init(ctx: &mut Context, rand_seed: i32) {
     srand(rand_seed as usize);
     ctx.hunter.x = GRID_W / 2;
     ctx.hunter.y = GRID_H / 2;
 }
 
 #[no_mangle]
-pub extern "C" fn tick() {
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = (*guard).as_mut().expect("ctx not initialized");
+pub extern "C" fn tick(ctx: &mut Context) {
     // Find the closest runner and move towards it.
     let mut min_dx: i32 = 0;
     let mut min_dy: i32 = 0;
@@ -75,10 +66,14 @@ pub extern "C" fn tick() {
 }
 
 #[no_mangle]
-pub extern "C" fn modify_grid() {
+pub extern "C" fn large_alloc(_ctx: &mut Context) {
+    println!("[h] Requesting large allocation");
+    std::mem::forget(Vec::<u8>::with_capacity(100000));
+}
+
+#[no_mangle]
+pub extern "C" fn modify_grid(ctx: &mut Context) {
     println!("[h] Attempting to write to read-only memory...");
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = (*guard).as_mut().expect("ctx not initialized");
     ctx.grid[0][0] = 2;
 }
 

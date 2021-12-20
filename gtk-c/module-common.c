@@ -29,18 +29,37 @@ void print(const char *fmt, ...) {
   print_callback(len, msg);
 }
 
+EMSCRIPTEN_KEEPALIVE
+void* malloc_(size_t size) {
+  return malloc(size);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void update_context(Context *ctx, void *ro_ptr, void *rw_ptr) {
+  ctx->grid = ro_ptr;
+  ctx->hunter = rw_ptr;
+  ctx->runners = rw_ptr + sizeof(Hunter);
+}
+
+EMSCRIPTEN_KEEPALIVE
+Context *create_context(void *ro_ptr, void *rw_ptr) {
+  Context *ctx = malloc(sizeof(Context));
+  update_context(ctx, ro_ptr, rw_ptr);
+  return ctx;
+}
+
 int rand_step() {
   return (rand() % 3) - 1;
 }
 
-void move(int *x, int *y, int mx, int my) {
+void move(Context *ctx, int *x, int *y, int mx, int my) {
   // If the dest cell is blocked, try a random move; if that's also blocked just stay still.
   int tx = *x + mx;
   int ty = *y + my;
-  if (grid[ty][tx] == 1) {
+  if (ctx->grid[ty][tx] == 1) {
     tx = *x + rand_step();
     ty = *y + rand_step();
-    if (grid[ty][tx] == 1) {
+    if (ctx->grid[ty][tx] == 1) {
       return;
     }
   }
@@ -51,9 +70,4 @@ void move(int *x, int *y, int mx, int my) {
 // Converts an arbitrary delta into a unit step.
 int step(int delta) {
   return (delta == 0) ? 0 : ((delta > 0) ? 1 : -1);
-}
-
-EMSCRIPTEN_KEEPALIVE
-void* malloc_(size_t size) {
-  return malloc(size);
 }

@@ -29,7 +29,8 @@
 
 enum ExportFuncs {
   FN_MALLOC,
-  FN_SET_SHARED,
+  FN_CREATE_CONTEXT,
+  FN_UPDATE_CONTEXT,
   FN_INIT,
   FN_TICK,
   FN_MODIFY_GRID,
@@ -37,7 +38,8 @@ enum ExportFuncs {
 
 const char *kExportFuncNames[] = {
   "malloc_",
-  "set_shared",
+  "create_context",
+  "update_context",
   "init",
   "tick",
   "modify_grid",
@@ -62,6 +64,9 @@ typedef struct {
   // Export references
   wasm_memory_t *memory;
   wasm_func_t *funcs[N_FUNCS];
+
+  // Module runtime context.
+  int wasm_context;
 
   // Shared buffers
   own unsigned char *ro_buf;
@@ -102,10 +107,10 @@ static bool error(const char *fmt, ...) {
 typedef struct {
   bool ok;
   int val;
-} FuncResult;
+} CallResult;
 
 // Wraps the cumbersome wasm_func_call API. Assumes args and return value, where present, are i32.
-static FuncResult fn_call(int index, ...) {
+static CallResult wasm_call(int index, ...) {
   wasm_func_t *fn = wc.funcs[index];
   int arity = wasm_func_param_arity(fn);
   bool has_result = wasm_func_result_arity(fn);
@@ -129,7 +134,7 @@ static FuncResult fn_call(int index, ...) {
   va_end(ap);
 
   // Call the wasm function.
-  FuncResult result = { false, 0 };
+  CallResult result = { false, 0 };
   wasm_val_t res[1] = { WASM_INIT_VAL };
   wasm_val_vec_t res_vec = WASM_ARRAY_VEC(res);
   own wasm_trap_t *trap =
@@ -239,11 +244,11 @@ static bool init_module() {
   return true;
 }
 
-static bool map_shared_bufs() {
+static bool map_shared_buffers() {
   // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
   int page_size = sysconf(_SC_PAGESIZE);
   int wasm_alloc_size = wc.ro_size + wc.rw_size + 3 * page_size;
-  FuncResult wasm_alloc_res = fn_call(FN_MALLOC, wasm_alloc_size);
+  CallResult wasm_alloc_res = wasm_call(FN_MALLOC, wasm_alloc_size);
   if (!wasm_alloc_res.ok) {
     return false;
   }
@@ -287,7 +292,9 @@ static bool map_shared_bufs() {
   // Inform the wasm module of the aligned shared buffer location in linear memory.
   int ro_index = (void *)wc.ro_buf - wasm_memory_base;
   int rw_index = (void *)wc.rw_buf - wasm_memory_base;
-  return fn_call(FN_SET_SHARED, ro_index, wc.ro_size, rw_index, wc.rw_size).ok;
+  CallResult ctx_res = wasm_call(FN_CREATE_CONTEXT, ro_index, rw_index);
+  wc.wasm_context = ctx_res.val;
+  return ctx_res.ok;
 }
 
 static void destroy() {
@@ -328,16 +335,17 @@ static void command_loop() {
     assert(read(wc.read_fd, &cmd, 1) == 1);
     switch (cmd) {
       case CMD_INIT:
-        ok = fn_call(FN_INIT, time(NULL)).ok;
+        ok = wasm_call(FN_INIT, wc.wasm_context, time(NULL)).ok;
         break;
       case CMD_TICK:
-        ok = fn_call(FN_TICK).ok;
+        ok = wasm_call(FN_TICK, wc.wasm_context).ok;
+        break;
+      case CMD_MODIFY_GRID:
+        ok = wasm_call(FN_MODIFY_GRID, wc.wasm_context).ok;
         break;
       case CMD_EXIT:
         send(cmd);
         return;
-      case CMD_MODIFY_GRID:
-        ok = fn_call(FN_MODIFY_GRID).ok;
       default:
         ok = error("Unknown command code: '%c' (%d)", cmd, cmd);
         break;
@@ -364,7 +372,7 @@ int main(int argc, const char *argv[]) {
   wc.rw_size = atoi(argv[8]);
 
   info("Container started; module '%s', pid %d", wc.module_name, getpid());
-  if (init_module() && map_shared_bufs()) {
+  if (init_module() && map_shared_buffers()) {
     send(CMD_READY);
     command_loop();
   }

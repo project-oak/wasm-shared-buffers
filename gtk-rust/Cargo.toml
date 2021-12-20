@@ -5,7 +5,7 @@ edition = "2018"
 default-run = "host"
 
 [features]
-modules = ["lazy_static"]
+modules = []
 host = [ "exec", "fork", "glib", "gtk", "libc", "rand", "wasmi", "wasmer-runtime"]
 
 [dependencies]
@@ -17,8 +17,6 @@ libc = { version = "*", optional = true }
 rand = { version = "*", optional = true }
 wasmi = { version = "*", optional = true }
 wasmer-runtime = { version = "*", optional = true }
-lazy_static = { version = "1.4.0", optional = true }
-# wee_alloc = { version = "0.4.5", optional = true }
 
 [lib]
 name = "common"

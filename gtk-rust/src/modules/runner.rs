@@ -14,26 +14,11 @@
 // limitations under the License.
 //
 
+use common::module_common::{move_by, print_str, rand, rand_step, rand_usize, srand, Context, GRID_H, GRID_W};
 use common::println;
-use common::module_common::{CTX, move_by, GRID_H, GRID_W, Context, srand, Hunter, GridType, Runner, N_RUNNERS, rand_usize, rand_step, rand, print_str};
 use common::shared::{cptr, State};
 
 const SCARE_DIST: i32 = 10;
-
-#[no_mangle]
-pub extern "C" fn set_shared(ro_ptr: cptr, _ro_len: i32, rw_ptr: cptr, _rw_len: i32) {
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = &mut (*guard);
-    unsafe {
-        ctx.replace(
-            Context {
-                grid: Box::from_raw(ro_ptr as *mut GridType),
-                hunter: Box::from_raw(rw_ptr as *mut Hunter),
-                runners: Box::from_raw(rw_ptr.add(std::mem::size_of::<Hunter>()) as *mut [Runner; N_RUNNERS]),
-            }
-        );
-    }
-}
 
 #[no_mangle]
 pub extern "C" fn malloc_(size: usize) -> cptr {
@@ -44,9 +29,17 @@ pub extern "C" fn malloc_(size: usize) -> cptr {
 }
 
 #[no_mangle]
-pub extern "C" fn init(rand_seed: i32) {
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx: &mut Context = (guard.as_mut()).expect("ctx not initialized");
+pub extern "C" fn create_context(ro_ptr: cptr, rw_ptr: cptr) -> *mut Context {
+    Context::new_unowned(ro_ptr, rw_ptr)
+}
+
+#[no_mangle]
+pub extern "C" fn update_context(ctx: &mut Context, ro_ptr: cptr, rw_ptr: cptr) {
+    ctx.update(ro_ptr, rw_ptr);
+}
+
+#[no_mangle]
+pub extern "C" fn init(ctx: &mut Context, rand_seed: i32) {
     srand(rand_seed as usize);
     for r in &mut *ctx.runners {
         r.x = 1 + rand_usize() % (GRID_W - 2);
@@ -56,9 +49,7 @@ pub extern "C" fn init(rand_seed: i32) {
 }
 
 #[no_mangle]
-pub extern "C" fn tick() {
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = (*guard).as_mut().expect("ctx not initialized");
+pub extern "C" fn tick(ctx: &mut Context) {
     // Find the closest runner and move towards it.
     for r in &mut *ctx.runners {
         if r.state == State::Dead {
@@ -84,10 +75,7 @@ pub extern "C" fn tick() {
                 0 => (dx, rand_step()),
                 1 => (rand_step(), dy),
                 2 => (dx, dy),
-                n => {
-                    print!("FAILED {}", n);
-                    todo!()
-                }
+                _ => return,
             }
         };
         move_by(&ctx.grid, &mut r.x, &mut r.y, mx, my);
@@ -95,11 +83,14 @@ pub extern "C" fn tick() {
 }
 
 #[no_mangle]
-pub extern "C" fn modify_grid() {
-    println!("[r] Attempting to write to read-only memory...");
-    let mut guard = CTX.lock().expect("Failed to aquire ctx lock");
-    let ctx = (*guard).as_mut().expect("ctx not initialized");
-    ctx.grid[0][0] = 2;
+pub extern "C" fn large_alloc(_ctx: &mut Context) {
+    println!("[r] Requesting large allocation");
+    std::mem::forget(Vec::<u8>::with_capacity(100000));
+}
+
+#[no_mangle]
+pub extern "C" fn modify_grid(_ctx: &mut Context) {
+    // Not implemented
 }
 
 fn main() {

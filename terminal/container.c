@@ -38,7 +38,7 @@ enum ExportFuncs {
 };
 
 const char *kExportFuncNames[] = {
-  "malloc_",
+  "malloc",
   "set_shared",
   "verify_shared",
   "fill_memory",

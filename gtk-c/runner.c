@@ -20,36 +20,32 @@
 #include <emscripten.h>
 #include "common.h"
 
-int (*grid)[GRID_W];
-const Hunter *hunter;
-Runner *runners;
+typedef struct {
+  int (*grid)[GRID_W];
+  const Hunter *hunter;
+  Runner *runners;
+} Context;
 
 #include "module-common.c"
 
 EMSCRIPTEN_KEEPALIVE
-void set_shared(void *ro_ptr, int ro_len, void *rw_ptr, int rw_len) {
-  grid = ro_ptr;
-  hunter = rw_ptr;
-  runners = rw_ptr + sizeof(Hunter);
-}
-
-EMSCRIPTEN_KEEPALIVE
-void init(int rand_seed) {
+void init(Context *ctx, int rand_seed) {
   srand(rand_seed);
-  for (int i = 0; i < N_RUNNERS; i++) {
-    runners[i].x = 1 + rand() % (GRID_W - 2);
-    runners[i].y = 1 + rand() % (GRID_H - 2);
-    runners[i].state = WALKING;
+  Runner *r = ctx->runners;
+  for (int i = 0; i < N_RUNNERS; r++, i++) {
+    r->x = 1 + rand() % (GRID_W - 2);
+    r->y = 1 + rand() % (GRID_H - 2);
+    r->state = WALKING;
   }
 }
 
 EMSCRIPTEN_KEEPALIVE
-void tick() {
-  Runner *r = runners;
+void tick(Context *ctx) {
+  Runner *r = ctx->runners;
   for (int i = 0; i < N_RUNNERS; r++, i++) {
     // If the hunter has reached us, we're dead.
-    int dx = r->x - hunter->x;
-    int dy = r->y - hunter->y;
+    int dx = r->x - ctx->hunter->x;
+    int dy = r->y - ctx->hunter->y;
     if (r->state == DEAD || (dx == 0 && dy == 0)) {
       r->state = DEAD;
       continue;
@@ -81,11 +77,16 @@ void tick() {
           break;
       }
     }
-    move(&r->x, &r->y, mx, my);
+    move(ctx, &r->x, &r->y, mx, my);
   }
 }
 
 EMSCRIPTEN_KEEPALIVE
-void modify_grid() {
+void large_alloc(Context *ctx) {
+  // Not implemented.
+}
+
+EMSCRIPTEN_KEEPALIVE
+void modify_grid(Context *ctx) {
   // Not implemented.
 }
