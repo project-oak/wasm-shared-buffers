@@ -169,6 +169,12 @@ case "$CMD" in
     ./container +
     ;;
 
+  l) # Lookup store comparison
+    cd rust/lookup
+    cargo build --bin reader --target wasm32-unknown-unknown
+    cargo run --bin lookup --features lookup -- target/wasm32-unknown-unknown/debug/reader.wasm
+    ;;
+
   t) # Terminal tests
     setup_deps
     cd terminal
@@ -186,6 +192,7 @@ case "$CMD" in
   clean)
     rm -vf {c/{gtk,heap-guard},terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
     ( cd rust/gtk && cargo clean -v )
+    ( cd rust/lookup && cargo clean -v )
     ;;
 
   *)  echo "Usage: ./run.sh [-r] (gc | gr | grc | gcr | h | t | i | clean)"

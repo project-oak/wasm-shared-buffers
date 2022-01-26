@@ -14,9 +14,7 @@
 // limitations under the License.
 //
 
-//~ Inlined via #include in hunter.c and runner.c
-//~ enum ExportFuncs {
-// const char *kExportFuncNames[] = {
+// Inlined via #include in gtk/container.c and heap-guard/container.c
 
 #define N_FUNCS  (sizeof(kExportFuncNames) / sizeof(*kExportFuncNames))
 

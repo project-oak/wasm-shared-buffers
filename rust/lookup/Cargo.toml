@@ -1,0 +1,21 @@
+[package]
+name = "lookup"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+lookup = ["libc", "rand", "wasmi"]
+
+[dependencies]
+libc = { version = "*", optional = true }
+rand = { version = "*", optional = true }
+wasmi = { version = "*", optional = true }
+
+[[bin]]
+name = "lookup"
+path = "src/main.rs"
+required-features = ["lookup"]
+
+[[bin]]
+name = "reader"
+path = "src/reader.rs"
