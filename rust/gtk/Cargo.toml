@@ -6,7 +6,7 @@ default-run = "host"
 
 [features]
 modules = []
-host = [ "exec", "fork", "glib", "gtk", "libc", "rand", "wasmi", "wasmer-runtime"]
+host = ["exec", "fork", "glib", "gtk", "libc", "rand", "wasmi", "wasmer-runtime"]
 
 [dependencies]
 exec = { version = "*", optional = true }

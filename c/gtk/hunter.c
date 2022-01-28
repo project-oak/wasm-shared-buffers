@@ -22,8 +22,8 @@
 
 typedef struct {
   int (*grid)[GRID_W];
-  const Hunter *hunter;
-  Runner *runners;
+  Hunter *hunter;
+  const Runner *runners;
 } Context;
 
 #include "module-common.c"
@@ -31,62 +31,34 @@ typedef struct {
 EMSCRIPTEN_KEEPALIVE
 void init(Context *ctx, int rand_seed) {
   srand(rand_seed);
-  Runner *r = ctx->runners;
-  for (int i = 0; i < N_RUNNERS; r++, i++) {
-    r->x = 1 + rand() % (GRID_W - 2);
-    r->y = 1 + rand() % (GRID_H - 2);
-    r->state = WALKING;
-  }
+  ctx->hunter->x = GRID_W / 2;
+  ctx->hunter->y = GRID_H / 2;
 }
 
 EMSCRIPTEN_KEEPALIVE
 void tick(Context *ctx) {
-  Runner *r = ctx->runners;
+  // Find the closest runner and move towards it.
+  int min_dx = 0;
+  int min_dy = 0;
+  int min_dist = 99999;
+  const Runner *r = ctx->runners;
   for (int i = 0; i < N_RUNNERS; r++, i++) {
-    // If the hunter has reached us, we're dead.
+    if (r->state == DEAD)
+      continue;
     int dx = r->x - ctx->hunter->x;
     int dy = r->y - ctx->hunter->y;
-    if (r->state == DEAD || (dx == 0 && dy == 0)) {
-      r->state = DEAD;
-      continue;
-    }
-
-    int mx;
-    int my;
     int dist = dx * dx + dy * dy;
-    if (dist > SCARE_DIST * SCARE_DIST) {
-      // Hunter is too far away; random walk.
-      r->state = WALKING;
-      mx = rand_step();
-      my = rand_step();
-    } else {
-      // Run! ..but with some randomness.
-      r->state = RUNNING;
-      switch (rand() % 3) {
-        case 0:
-          mx = step(dx);
-          my = rand_step();
-          break;
-        case 1:
-          mx = rand_step();
-          my = step(dy);
-          break;
-        case 2:
-          mx = step(dx);
-          my = step(dy);
-          break;
-      }
+    if (dist < min_dist) {
+      min_dx = dx;
+      min_dy = dy;
+      min_dist = dist;
     }
-    move(ctx, &r->x, &r->y, mx, my);
   }
-}
-
-EMSCRIPTEN_KEEPALIVE
-void large_alloc(Context *ctx) {
-  // Not implemented.
+  move(ctx, &ctx->hunter->x, &ctx->hunter->y, step(min_dx), step(min_dy));
 }
 
 EMSCRIPTEN_KEEPALIVE
 void modify_grid(Context *ctx) {
-  // Not implemented.
+  print("[h] Attempting to write to read-only memory...\n");
+  ctx->grid[0][0] = 2;
 }

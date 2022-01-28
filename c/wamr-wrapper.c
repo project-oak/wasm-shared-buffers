@@ -13,46 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-#include <fcntl.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include "wasm_c_api.h"
-#include "common.h"
+
+//~ Inlined via #include in hunter.c and runner.c
+//~ enum ExportFuncs {
+// const char *kExportFuncNames[] = {
+
+#define N_FUNCS  (sizeof(kExportFuncNames) / sizeof(*kExportFuncNames))
 
 // Ownership indicator as used by the wasm-c-api code.
 #define own
 
-enum ExportFuncs {
-  FN_MALLOC,
-  FN_CREATE_CONTEXT,
-  FN_UPDATE_CONTEXT,
-  FN_INIT,
-  FN_TICK,
-  FN_MODIFY_GRID,
-};
-
-const char *kExportFuncNames[] = {
-  "malloc_",
-  "create_context",
-  "update_context",
-  "init",
-  "tick",
-  "modify_grid",
-};
-
-#define N_FUNCS  (sizeof(kExportFuncNames) / sizeof(*kExportFuncNames))
-
 typedef struct {
-  const char *module_name;
-  const char *label;
-  int read_fd;
-  int write_fd;
-
   // Engine components
   own wasm_engine_t *engine;
   own wasm_store_t *store;
@@ -64,45 +35,9 @@ typedef struct {
   // Export references
   wasm_memory_t *memory;
   wasm_func_t *funcs[N_FUNCS];
-
-  // Module runtime context.
-  int wasm_context;
-
-  // Shared buffers
-  own unsigned char *ro_buf;
-  const char *ro_name;
-  int ro_size;
-
-  own unsigned char *rw_buf;
-  const char *rw_name;
-  int rw_size;
 } WasmComponents;
 
 WasmComponents wc = { 0 };
-
-// Aligns to next largest page boundary, unless p is already aligned.
-static void *page_align(void *p, size_t page_size) {
-  return (void *)((((size_t)p - 1) & ~(page_size - 1)) + page_size);
-}
-
-static void info(const char *fmt, ...) {
-  char msg[500];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(msg, 500, fmt, ap);
-  va_end(ap);
-  printf("[%s] %s\n", wc.label, msg);
-}
-
-static bool error(const char *fmt, ...) {
-  char msg[500];
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(msg, 500, fmt, ap);
-  va_end(ap);
-  fprintf(stderr, "[%s] >> %s\n", wc.label, msg);
-  return false;
-}
 
 typedef struct {
   bool ok;
@@ -149,7 +84,7 @@ static CallResult wasm_call(int index, ...) {
     // Failure - display the error message.
     own wasm_message_t msg;
     wasm_trap_message(trap, &msg);
-    error("Error calling '%s': %s", name, msg.data);
+    fprintf(stderr, "Error calling '%s': %s", name, msg.data);
     wasm_byte_vec_delete(&msg);
     wasm_trap_delete(trap);
   }
@@ -157,7 +92,7 @@ static CallResult wasm_call(int index, ...) {
 }
 
 static wasm_trap_t *print_callback(const wasm_val_vec_t *args, wasm_val_vec_t *results) {
-  // args: int len, const char* msg
+  // args: int len, const char *msg
   assert(args->size == 2);
   assert(args->data[0].kind == WASM_I32);
   assert(args->data[1].kind == WASM_I32);
@@ -170,10 +105,11 @@ static wasm_trap_t *print_callback(const wasm_val_vec_t *args, wasm_val_vec_t *r
   return NULL;
 }
 
-static bool init_module() {
-  FILE *file = fopen(wc.module_name, "r");
+static bool init_module(const char *module_name) {
+  FILE *file = fopen(module_name, "r");
   if (file == NULL) {
-    return error("Error loading wasm file");
+    fprintf(stderr, "Error loading wasm file '%s'", module_name);
+    return false;
   }
   fseek(file, 0, SEEK_END);
   wasm_byte_vec_t wasm_bytes;
@@ -187,7 +123,8 @@ static bool init_module() {
   wc.store = wasm_store_new(wc.engine);
   wc.module = wasm_module_new(wc.store, &wasm_bytes);
   if (wc.module == NULL) {
-    return error("Error compiling module");
+    fprintf(stderr, "Error compiling module");
+    return false;
   }
   free(wasm_bytes.data);
 
@@ -207,7 +144,8 @@ static bool init_module() {
   wc.instance = wasm_instance_new(wc.store, wc.module, &import_object, NULL);
   wasm_func_delete(print_func);
   if (wc.instance == NULL) {
-    return error("Error instantiating module");
+    fprintf(stderr, "Error instantiating module");
+    return false;
   }
 
   // Retrieve module exports.
@@ -234,76 +172,19 @@ static bool init_module() {
     }
   }
   if (wc.memory == NULL) {
-    return error("'memory' export not found");
+    fprintf(stderr, "'memory' export not found");
+    return false;
   }
   for (int i = 0; i < N_FUNCS; i++) {
     if (wc.funcs[i] == NULL) {
-      return error("Function export '%s' not found", kExportFuncNames[i]);
+      fprintf(stderr, "Function export '%s' not found", kExportFuncNames[i]);
+      return false;
     }
   }
   return true;
 }
 
-static bool map_shared_buffers() {
-  // Call wasm.malloc to reserve enough space for the shared buffers plus alignment concerns.
-  int page_size = sysconf(_SC_PAGESIZE);
-  int wasm_alloc_size = wc.ro_size + wc.rw_size + 3 * page_size;
-  CallResult wasm_alloc_res = wasm_call(FN_MALLOC, wasm_alloc_size);
-  if (!wasm_alloc_res.ok) {
-    return false;
-  }
-
-  // Get the location of wasm's linear memory buffer in our address space.
-  void *wasm_memory_base = wasm_memory_data(wc.memory);
-
-  // Convert the reserve alloc's linear address to our address space.
-  void *wasm_alloc_ptr = wasm_memory_base + wasm_alloc_res.val;
-
-  // Align the shared buffers inside wasm's linear memory against our page boundaries.
-  void *aligned_ro_ptr = page_align(wasm_alloc_ptr, page_size);
-  void *aligned_rw_ptr = page_align(aligned_ro_ptr + wc.ro_size, page_size);
-
-  // Verify that our overall mmapped size will be safely contained in the wasm allocation.
-  void *end = page_align(aligned_rw_ptr + wc.rw_size, page_size);
-  assert(end - wasm_alloc_ptr <= wasm_alloc_size);
-
-  // Map read-only buffer.
-  int flags = MAP_SHARED | MAP_FIXED;
-  int ro_fd = shm_open(wc.ro_name, O_RDONLY, S_IRUSR | S_IWUSR);
-  if (ro_fd == -1) {
-    return error("Error calling shm_open");
-  }
-  wc.ro_buf = mmap(aligned_ro_ptr, wc.ro_size, PROT_READ, flags, ro_fd, 0);
-  assert(wc.ro_buf == aligned_ro_ptr);
-
-  // Map read-write buffer.
-  int rw_fd = shm_open(wc.rw_name, O_RDWR, S_IRUSR | S_IWUSR);
-  if (rw_fd == -1) {
-    return error("Error calling shm_open");
-  }
-  wc.rw_buf = mmap(aligned_rw_ptr, wc.rw_size, PROT_READ | PROT_WRITE, flags, rw_fd, 0);
-  assert(wc.rw_buf == aligned_rw_ptr);
-
-  // We don't need the file descriptors once the buffers have been mapped.
-  assert(close(rw_fd) != -1 && close(ro_fd) != -1);
-  info("  read-only  buffer: %p", wc.ro_buf);
-  info("  read-write buffer: %p", wc.rw_buf);
-
-  // Inform the wasm module of the aligned shared buffer location in linear memory.
-  int ro_index = (void *)wc.ro_buf - wasm_memory_base;
-  int rw_index = (void *)wc.rw_buf - wasm_memory_base;
-  CallResult ctx_res = wasm_call(FN_CREATE_CONTEXT, ro_index, rw_index);
-  wc.wasm_context = ctx_res.val;
-  return ctx_res.ok;
-}
-
-static void destroy() {
-  if (wc.rw_buf != NULL) {
-    assert(munmap(wc.rw_buf, wc.rw_size) != -1);
-  }
-  if (wc.ro_buf != NULL) {
-    assert(munmap(wc.ro_buf, wc.ro_size) != -1);
-  }
+static void destroy_module() {
   if (wc.instance_exports.data != NULL) {
     wasm_extern_vec_delete(&wc.instance_exports);
   }
@@ -322,59 +203,4 @@ static void destroy() {
   if (wc.engine != NULL) {
     wasm_engine_delete(wc.engine);
   }
-}
-
-static void send(Command code) {
-  assert(write(wc.write_fd, &code, 1) == 1);
-}
-
-static void command_loop() {
-  bool ok = true;
-  while (ok) {
-    char cmd = '-';
-    assert(read(wc.read_fd, &cmd, 1) == 1);
-    switch (cmd) {
-      case CMD_INIT:
-        ok = wasm_call(FN_INIT, wc.wasm_context, time(NULL)).ok;
-        break;
-      case CMD_TICK:
-        ok = wasm_call(FN_TICK, wc.wasm_context).ok;
-        break;
-      case CMD_MODIFY_GRID:
-        ok = wasm_call(FN_MODIFY_GRID, wc.wasm_context).ok;
-        break;
-      case CMD_EXIT:
-        send(cmd);
-        return;
-      default:
-        ok = error("Unknown command code: '%c' (%d)", cmd, cmd);
-        break;
-    }
-    if (ok) {
-      // Send ack to host.
-      send(cmd);
-    } else {
-      printf("Command failed: %c\n", cmd);
-      send(CMD_FAILED);
-    }
-  }
-}
-
-int main(int argc, const char *argv[]) {
-  assert(argc == 9);
-  wc.module_name = argv[1];
-  wc.label = argv[2];
-  wc.read_fd = atoi(argv[3]);
-  wc.write_fd = atoi(argv[4]);
-  wc.ro_name = argv[5];
-  wc.ro_size = atoi(argv[6]);
-  wc.rw_name = argv[7];
-  wc.rw_size = atoi(argv[8]);
-
-  info("Container started; module '%s', pid %d", wc.module_name, getpid());
-  if (init_module() && map_shared_buffers()) {
-    send(CMD_READY);
-    command_loop();
-  }
-  destroy();
 }

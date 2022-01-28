@@ -16,8 +16,8 @@
 
 // Inlined via #include in hunter.c and runner.c
 
-EM_JS(void, print_callback, (int, const char* msg), {})
-extern void print_callback(int len, const char* msg);
+EM_JS(void, print_callback, (int, const char *msg), {})
+extern void print_callback(int len, const char *msg);
 
 EMSCRIPTEN_KEEPALIVE
 void print(const char *fmt, ...) {
@@ -30,7 +30,7 @@ void print(const char *fmt, ...) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-void* malloc_(size_t size) {
+void *malloc_(size_t size) {
   return malloc(size);
 }
 
@@ -46,6 +46,11 @@ Context *create_context(void *ro_ptr, void *rw_ptr) {
   Context *ctx = malloc(sizeof(Context));
   update_context(ctx, ro_ptr, rw_ptr);
   return ctx;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void large_alloc() {
+  // Not implemented.
 }
 
 int rand_step() {

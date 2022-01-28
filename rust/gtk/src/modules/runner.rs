@@ -14,9 +14,11 @@
 // limitations under the License.
 //
 
-use common::module_common::{move_by, print_str, srand, Context, GRID_H, GRID_W};
+use common::module_common::{move_by, print_str, rand, rand_step, rand_usize, srand, Context, GRID_H, GRID_W};
 use common::println;
 use common::shared::{cptr, State};
+
+const SCARE_DIST: i32 = 10;
 
 #[no_mangle]
 pub extern "C" fn malloc_(size: usize) -> cptr {
@@ -27,7 +29,7 @@ pub extern "C" fn malloc_(size: usize) -> cptr {
 }
 
 #[no_mangle]
-pub extern "C" fn create_context(ro_ptr: cptr, rw_ptr: cptr) -> *const Context {
+pub extern "C" fn create_context(ro_ptr: cptr, rw_ptr: cptr) -> *mut Context {
     Context::new_unowned(ro_ptr, rw_ptr)
 }
 
@@ -39,44 +41,58 @@ pub extern "C" fn update_context(ctx: &mut Context, ro_ptr: cptr, rw_ptr: cptr) 
 #[no_mangle]
 pub extern "C" fn init(ctx: &mut Context, rand_seed: i32) {
     srand(rand_seed as usize);
-    ctx.hunter.x = GRID_W / 2;
-    ctx.hunter.y = GRID_H / 2;
+    for r in &mut *ctx.runners {
+        r.x = 1 + rand_usize() % (GRID_W - 2);
+        r.y = 1 + rand_usize() % (GRID_H - 2);
+        r.state = State::Walking;
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn tick(ctx: &mut Context) {
     // Find the closest runner and move towards it.
-    let mut min_dx: i32 = 0;
-    let mut min_dy: i32 = 0;
-    let mut min_dist = 99999;
-    for r in &*ctx.runners {
+    for r in &mut *ctx.runners {
         if r.state == State::Dead {
             continue;
         }
         let dx: i32 = r.x as i32 - ctx.hunter.x as i32;
         let dy: i32 = r.y as i32 - ctx.hunter.y as i32;
-        let dist = dx * dx + dy * dy;
-        if dist < min_dist {
-            min_dx = dx;
-            min_dy = dy;
-            min_dist = dist;
+        // If the hunter has reached us, we're dead.
+        if dx == 0 && dy == 0 {
+            r.state = State::Dead;
+            continue;
         }
+
+        let dist = dx * dx + dy * dy;
+        let (mx, my) = if dist > SCARE_DIST * SCARE_DIST {
+            // Hunter is too far away; random walk.
+            r.state = State::Walking;
+            (rand_step(), rand_step())
+        } else {
+            // Run! ..but with some randomness.
+            r.state = State::Running;
+            match rand().abs() % 3 {
+                0 => (dx, rand_step()),
+                1 => (rand_step(), dy),
+                2 => (dx, dy),
+                _ => return,
+            }
+        };
+        move_by(&ctx.grid, &mut r.x, &mut r.y, mx, my);
     }
-    move_by(&ctx.grid, &mut ctx.hunter.x, &mut ctx.hunter.y, min_dx, min_dy);
 }
 
 #[no_mangle]
-pub extern "C" fn large_alloc(_ctx: &mut Context) {
-    println!("[h] Requesting large allocation");
+pub extern "C" fn large_alloc() {
+    println!("[r] Requesting large allocation");
     std::mem::forget(Vec::<u8>::with_capacity(100000));
 }
 
 #[no_mangle]
-pub extern "C" fn modify_grid(ctx: &mut Context) {
-    println!("[h] Attempting to write to read-only memory...");
-    ctx.grid[0][0] = 2;
+pub extern "C" fn modify_grid(_ctx: &mut Context) {
+    // Not implemented
 }
 
 fn main() {
-    println!("hunter: Not meant to be run as a main");
+    println!("runner: Not meant to be run as a main");
 }

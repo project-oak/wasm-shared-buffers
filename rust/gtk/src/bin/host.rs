@@ -56,8 +56,8 @@ impl HostContext<'_> {
         let shared_ro = create_shared_buffer(READ_ONLY_BUF_NAME, READ_ONLY_BUF_SIZE);
         let shared_rw = create_shared_buffer(READ_WRITE_BUF_NAME, READ_WRITE_BUF_SIZE);
         // TODO: Use own path to find the other binaries
-        fork_container("gtk-rust/target/debug/container-wasmer", hunter_path, HUNTER_SIGNAL_INDEX);
-        fork_container("gtk-rust/target/debug/container-wasmi", runner_path, RUNNER_SIGNAL_INDEX);
+        fork_container("rust/gtk/target/debug/container-wasmer", hunter_path, HUNTER_SIGNAL_INDEX);
+        fork_container("rust/gtk/target/debug/container-wasmi", runner_path, RUNNER_SIGNAL_INDEX);
 
         // Grid and Actors do *not* take ownership of the shared buffers.
         let mut ctx = Self {

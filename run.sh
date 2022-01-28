@@ -60,43 +60,42 @@ get_rust_tooling() {
   echo "Done"
 }
 
-check_gtk4() {
-  if ! pkg-config --validate gtk4 &>/dev/null; then
-    echo "gtk4 dev libraries are required: please run 'sudo apt-get install libgtk-4-dev'"
-    exit 1
-  fi
-}
-
 build_wasm_c() {
   local F NAME=$1 FLAGS="$2"
+  . $EMSDK/emsdk_env.sh &>/dev/null
   for F in $NAME.c "${@:3}"; do
     if [ $F -nt $NAME.wasm ]; then
       echo "Building $NAME.wasm"
-      . $EMSDK/emsdk_env.sh &>/dev/null
       emcc --no-entry -s EXPORTED_FUNCTIONS="['_malloc']" $FLAGS -Os $NAME.c -o $NAME.wasm
       break
     fi
   done
 }
 
+build_gtk_wasm_c() {
+  if ! pkg-config --validate gtk4 &>/dev/null; then
+    echo "gtk4 dev libraries are required: please run 'sudo apt-get install libgtk-4-dev'"
+    exit 1
+  fi
+  cd c/gtk
+  for W in hunter runner; do
+    build_wasm_c $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
+  done
+  cd ../..
+}
+
 build_gtk_wasm_rust() {
   cargo build $MODE_FLAG --target "$RUST_WASM_TARGET" --manifest-path "$RUST_CONFIG" --features modules
 }
 
-build_gtk_wasm_c() {
-  check_gtk4
-  cd gtk-c
-  for W in hunter runner; do
-    build_wasm_c $W "-s TOTAL_MEMORY=16MB" module-common.c common.h
-  done
-  cd ..
-}
-
-build_host() {
+build_wasm_container() {
   echo "Building container"
   gcc container.c -o container -I$WAMR/core/iwasm/include -L$WAMR/build -lvmlib -lm -lpthread -lrt
+}
+
+build_wasm_host() {
   echo "Building host"
-  gcc $1 host.c -o host "$@" -lrt
+  gcc host.c -o host $(pkg-config --cflags --libs gtk4) -lrt
 }
 
 run() {
@@ -125,47 +124,58 @@ BASE=$(dirname $(readlink -f $0))
 WAMR=$BASE/deps/wasm-micro-runtime
 EMSDK=$BASE/deps/emsdk
 RUST_WASM_TARGET="wasm32-unknown-unknown"
-RUST_CONFIG="gtk-rust/Cargo.toml"
-RUST_MODULES_OUT="gtk-rust/target/${RUST_WASM_TARGET}/${MODE}"
+RUST_CONFIG="rust/gtk/Cargo.toml"
+RUST_MODULES_OUT="rust/gtk/target/${RUST_WASM_TARGET}/${MODE}"
 
 case "$CMD" in
-  gc) # C-based GTK demo
+  gc) # C GTK demo
     setup_deps
     build_gtk_wasm_c
-    cd gtk-c
-    build_host $(pkg-config --cflags --libs gtk4)
-    run hunter.wasm runner.wasm
+    cd c/gtk
+    build_wasm_container
+    build_wasm_host
+    ./host hunter.wasm runner.wasm
     ;;
 
-  grc) # Rust-based GTK demo; uses wasm modules from gtk-c
-    setup_deps
-    build_gtk_wasm_c
-    cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
-    cargo run $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host gtk-c/hunter.wasm gtk-c/runner.wasm
-    ;;
-
-  gcr) # C-based GTK demo with Rust wasm modules
-    setup_deps
-    build_gtk_wasm_rust
-    cd gtk-c
-    build_host $(pkg-config --cflags --libs gtk4)
-    run "../${RUST_MODULES_OUT}/hunter.wasm" "../${RUST_MODULES_OUT}/runner.wasm"
-    # run "../${RUST_MODULES_OUT}/runner.wasm" "../${RUST_MODULES_OUT}/hunter.wasm"
-    ;;
-
-  gr) # Rust-based GTK demo; uses wasm modules from gtk-rust
+  gr) # Rust GTK demo
     setup_deps
     build_gtk_wasm_rust
     cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
-    ./gtk-rust/target/${MODE}/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
+    ./rust/gtk/target/${MODE}/host "${RUST_MODULES_OUT}/hunter.wasm" "${RUST_MODULES_OUT}/runner.wasm"
     ;;
 
-  t) # Terminal-based tests (in C)
+  grc) # Rust GTK host/container with C wasm modules
+    setup_deps
+    build_gtk_wasm_c
+    cargo build $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host
+    cargo run $MODE_FLAG --manifest-path "$RUST_CONFIG" --features host c/gtk/hunter.wasm c/gtk/runner.wasm
+    ;;
+
+  gcr) # C GTK host/container with Rust wasm modules
+    setup_deps
+    build_gtk_wasm_rust
+    cd c/gtk
+    build_wasm_host
+    ./host "../../${RUST_MODULES_OUT}/hunter.wasm" "../../${RUST_MODULES_OUT}/runner.wasm"
+    ;;
+
+  h) # Heap guard demo
+    cd c/heap-guard
+    build_wasm_c module "-s TOTAL_MEMORY=64KB -s TOTAL_STACK=16KB"
+    build_wasm_container
+    echo -e "\n-- Without heap guard --"
+    ./container
+    echo -e "\n-- With heap guard --"
+    ./container +
+    ;;
+
+  t) # Terminal tests
     setup_deps
     cd terminal
     build_wasm_c module "-s TOTAL_MEMORY=64KB -s TOTAL_STACK=1KB"
-    build_host
-    run
+    build_wasm_container
+    gcc host.c -o host -lrt
+    ./host
     ;;
 
   i) # Install any deps needed
@@ -174,15 +184,16 @@ case "$CMD" in
     ;;
 
   clean)
-    rm -vf {gtk-*,terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
-    ( cd gtk-rust && cargo clean -v )
+    rm -vf {c/{gtk,heap-guard},terminal}/{*.wasm,container,host} /dev/shm/{shared_ro,shared_rw}
+    ( cd rust/gtk && cargo clean -v )
     ;;
 
-  *)  echo "Usage: ./run.sh [-r] (gc | gr | grc | gcr | t | i | clean)"
+  *)  echo "Usage: ./run.sh [-r] (gc | gr | grc | gcr | h | t | i | clean)"
       echo "  gc: GTK demo in C"
       echo "  gr: GTK demo in Rust"
       echo "  grc: GTK demo with Rust host and C wasm modules"
       echo "  gcr: GTK demo with C host and Rust wasm modules"
+      echo "  h: Heap guard demo"
       echo "  t: terminal-only tests"
       echo "  i: install dependencies"
       echo "  clean: cleans up build artifacts"
