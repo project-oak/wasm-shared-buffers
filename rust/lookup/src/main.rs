@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+use argparse::{ArgumentParser, Store};
 use libc::{MAP_FIXED, MAP_SHARED, O_CREAT, O_RDWR, O_TRUNC, PROT_READ, S_IRUSR, S_IWUSR};
 use rand::{distributions::{Alphanumeric, Distribution, Uniform}, Rng};
 use std::{
-    cmp, env, ffi::CString, fs::File, hash::Hasher, io::prelude::*, io::SeekFrom, mem, ops::RangeInclusive,
-    str, time::SystemTime,
-    collections::{hash_map::DefaultHasher, HashMap},
-    os::unix::io::{AsRawFd, FromRawFd},
+    collections::{hash_map::DefaultHasher, HashMap}, cmp, ffi::CString, fs::File,
+    hash::Hasher, io::{prelude::*, SeekFrom}, mem, ops::RangeInclusive,
+    os::unix::io::{AsRawFd, FromRawFd}, str, time::SystemTime,
 };
 use wasmi::{
     Error, Externals, FuncInstance, FuncRef, ImportsBuilder, LittleEndianConvert, MemoryRef,
@@ -28,30 +28,57 @@ use wasmi::{
 };
 
 const PAGE_SIZE: usize = 4096;
-const BUF_NAME: &str = "/lookup";
-
-const LOOKUP_ENTRIES: usize = 100000;
-const INDEX_SLOTS: usize = 32 * 1024;
-const KEY_SIZE: RangeInclusive<usize> = 3..=40;
+const MMAP_NAME: &str = "/lookup";
+const KEY_SIZE: RangeInclusive<usize> = 5..=40;
 const VAL_SIZE: RangeInclusive<usize> = 10..=200;
-const NUM_TEST_KEYS: i32 = 10000;
-const DEFAULT_MSG_BYTES: i32 = 50;
+
+struct Params {
+    lookup_entries: usize,
+    index_slots: usize,
+    test_keys: i32,
+    default_msg_bytes: i32,
+    module_name: String,
+}
 
 #[allow(non_camel_case_types)]
 type cptr = *mut core::ffi::c_void;
 
 fn main() {
-    let module_name = env::args().nth(1).expect("missing module name arg");
     assert_eq!(PAGE_SIZE, unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize });
 
-    println!("Loading wasm module");
-    let instance = load_wasm_module(&module_name);
+    let mut params = Params {
+        lookup_entries: 1_000_000,
+        index_slots: 128 * 1024,
+        test_keys: 10_000,
+        default_msg_bytes: 100,
+        module_name: String::default(),
+    };
+    {
+        let mut ap = ArgumentParser::new();
+        ap.refer(&mut params.lookup_entries)
+            .add_option(&["-e"], Store, "number of key/value entries in the lookup table");
+        ap.refer(&mut params.index_slots)
+            .add_option(&["-s"], Store, "number of hash slots in the lookup table");
+        ap.refer(&mut params.test_keys)
+            .add_option(&["-k"], Store, "number of test keys to use");
+        ap.refer(&mut params.default_msg_bytes)
+            .add_option(&["-m"], Store, "default size of message buffer for external lookup calls");
+        ap.refer(&mut params.module_name)
+            .add_argument("module_name", Store, "wasm module to run")
+            .required();
+        if ap.parse_args().is_err() {
+            return;
+        }
+    }
 
-    println!("Creating lookup table: {} entries, {} slots", LOOKUP_ENTRIES, INDEX_SLOTS);
-    let (lookup, test_keys) = create_lookup();
+    println!("Loading wasm module");
+    let instance = load_wasm_module(&params.module_name);
+
+    println!("Creating lookup table: {} entries, {} slots", params.lookup_entries, params.index_slots);
+    let (lookup, test_keys) = create_lookup(&params);
 
     println!("Storing lookup table");
-    let shm_file = store_lookup(&lookup);
+    let shm_file = store_lookup(&lookup, &params);
 
     let mut ctx = Context {
         instance: &instance,
@@ -65,10 +92,10 @@ fn main() {
     let test_keys_index = store_test_keys(&ctx, &test_keys);
 
     println!("Initializing wasm module");
-    initialise_wasm(&mut ctx, &shm_file, test_keys_index, test_keys.len() as i32);
+    initialise_wasm(&mut ctx, &params, &shm_file, test_keys_index, test_keys.len() as i32);
     wasm_call(&ctx, "verify_lookups", &[ctx.wasm_context]);
 
-    println!("Running performance tests: {} reps", NUM_TEST_KEYS);
+    println!("Running performance tests: {} reps", params.test_keys);
     let time = SystemTime::now();
     wasm_call(&ctx, "performance_test_internal", &[ctx.wasm_context]);
     let duration_int = time.elapsed().unwrap();
@@ -78,7 +105,7 @@ fn main() {
     wasm_call(&ctx, "performance_test_external", &[ctx.wasm_context]);
     let duration_ext = time.elapsed().unwrap();
     println!("  external: {:.2?}", duration_ext);
-    println!("  speed up: {:.1}x", duration_ext.as_millis() as f32 / duration_int.as_millis() as f32);
+    println!("  speed up: {:.1}x", duration_ext.as_micros() as f32 / duration_int.as_micros() as f32);
 }
 
 struct Context<'a> {
@@ -93,7 +120,7 @@ impl Drop for Context<'_> {
     fn drop(&mut self) {
         if self.buffer != std::ptr::null_mut() {
             assert!(self.buffer_size > 0);
-            let cname = CString::new(BUF_NAME).unwrap();
+            let cname = CString::new(MMAP_NAME).unwrap();
             unsafe {
                 if libc::munmap(self.buffer, self.buffer_size) == -1 {
                     println!("munmap failed for shared_ro");
@@ -116,14 +143,14 @@ fn load_wasm_module(module_name: &str) -> ModuleRef {
         .assert_no_start()
 }
 
-fn create_lookup() -> (HashMap<String, String>, Vec<u8>) {
+fn create_lookup(params: &Params) -> (HashMap<String, String>, Vec<u8>) {
     let mut lookup = HashMap::new();
     let mut test_keys = Vec::new();
     let mut test_key_count = 0;
     let mut rng = rand::thread_rng();
     let key_dist = Uniform::<usize>::from(KEY_SIZE);
     let val_dist = Uniform::<usize>::from(VAL_SIZE);
-    for _ in 0..LOOKUP_ENTRIES {
+    for _ in 0..params.lookup_entries {
         let key: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(key_dist.sample(&mut rng))
@@ -136,7 +163,7 @@ fn create_lookup() -> (HashMap<String, String>, Vec<u8>) {
             .map(char::from)
             .collect();
 
-        if test_key_count < NUM_TEST_KEYS {
+        if test_key_count < params.test_keys {
             test_keys.extend((key.len() as u32).to_le_bytes());
             test_keys.extend(key.as_bytes());
             test_key_count += 1;
@@ -150,25 +177,26 @@ fn create_lookup() -> (HashMap<String, String>, Vec<u8>) {
 //
 //  | index table | bumper | packed chains |
 //
-//  index table: list of u32 offsets into packed data (starting from end of the index table)
-//  bumper: a single unused byte so offsets of 0 can indicate an empty slot in the index table
-//  packed chains: a sequence of chains per used index slot; each chain has the format:
+// index table: list of u32 offsets into packed data (starting from end of the index table)
+// bumper: a single unused byte so offsets of 0 can indicate an empty slot in the index table
+// packed chains: a sequence of chains per used index slot; each chain has the format:
 //
 //  | n_pairs:u32 | key_len:u32 | key | value_len:u32 | value | key_len | ... |
 //
-fn store_lookup(lookup: &HashMap<String, String>) -> File {
+// Keys are stored in ascending size order to enable a slightly faster lookup on the wasm side.
+fn store_lookup(lookup: &HashMap<String, String>, params: &Params) -> File {
     // Convert the map to a table with vectors of key/value pairs.
-    let mut table = Vec::<Vec<KeyValue>>::with_capacity(INDEX_SLOTS);
-    table.resize(INDEX_SLOTS, Vec::new());
+    let mut table = Vec::<Vec<KeyValue>>::with_capacity(params.index_slots);
+    table.resize(params.index_slots, Vec::new());
     for (key, val) in lookup.iter() {
         let mut hasher = DefaultHasher::new();
         hasher.write(key.as_bytes());
-        let i = (hasher.finish() as usize) % INDEX_SLOTS;
+        let i = (hasher.finish() as usize) % params.index_slots;
         table[i].push(KeyValue(key.to_string(), val.to_string()));
     }
 
     // Create the shared memory file.
-    let cname = CString::new(BUF_NAME).unwrap();
+    let cname = CString::new(MMAP_NAME).unwrap();
     let fd = unsafe {
         libc::shm_open(cname.as_ptr(), O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR)
     };
@@ -179,7 +207,7 @@ fn store_lookup(lookup: &HashMap<String, String>) -> File {
 
     // Zero out the index table, adding a single bumper byte after it to allow indexes
     // of zero to indicate an empty slot.
-    file.set_len((INDEX_SLOTS * 4 + 1) as u64).unwrap();
+    file.set_len((params.index_slots * 4 + 1) as u64).unwrap();
 
     // Pack the key/value pairs onto the end of the file, tracking offsets (from the
     // start of the packed region, not the file) in the index table.
@@ -187,7 +215,7 @@ fn store_lookup(lookup: &HashMap<String, String>) -> File {
     let mut num_chains = 0usize;
     let mut sum_chain = 0usize;
     let mut max_chain = 0usize;
-    for i in 0..INDEX_SLOTS {
+    for i in 0..params.index_slots {
         if table[i].len() > 0 {
             table[i].sort();
             let list = &table[i];
@@ -273,7 +301,13 @@ fn store_test_keys(ctx: &Context, test_keys: &Vec<u8>) -> i32 {
 }
 
 // Set up the mapped buffer and create the wasm's context object.
-fn initialise_wasm(ctx: &mut Context, shm_file: &File, test_keys_index: i32, test_keys_bytes: i32) {
+fn initialise_wasm(
+    ctx: &mut Context,
+    params: &Params,
+    shm_file: &File,
+    test_keys_index: i32,
+    test_keys_bytes: i32,
+) {
     // Call wasm.malloc to reserve enough space for the mapped buffer plus alignment concerns.
     ctx.buffer_size = shm_file.metadata().unwrap().len() as usize;
     let alloc_size = ctx.buffer_size + 2 * PAGE_SIZE;
@@ -299,18 +333,18 @@ fn initialise_wasm(ctx: &mut Context, shm_file: &File, test_keys_index: i32, tes
 
     // Convert the aligned buffer location into its wasm linear memory index and inform the module.
     let wasm_buf_index = (ctx.buffer as usize - wasm_memory_base) as i32;
-    let lookup_bytes = ctx.buffer_size - INDEX_SLOTS * 4;
+    let lookup_bytes = ctx.buffer_size - params.index_slots * 4;
     ctx.wasm_context = wasm_call(
         ctx,
         "create_context",
         &[
             I32(wasm_buf_index),
-            I32(INDEX_SLOTS as i32),
+            I32(params.index_slots as i32),
             I32(lookup_bytes as i32),
-            I32(NUM_TEST_KEYS),
+            I32(params.test_keys),
             I32(test_keys_index),
             I32(test_keys_bytes),
-            I32(DEFAULT_MSG_BYTES),
+            I32(params.default_msg_bytes),
         ],
     ).expect("create_context should return a context pointer");
 }

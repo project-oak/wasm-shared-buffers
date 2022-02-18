@@ -107,18 +107,11 @@ run() {
 # Handle the command line arguments
 MODE="debug"
 MODE_FLAG=""
-for i in "$@"; do
-  case $i in
-    -r)
-      MODE="release"
-      MODE_FLAG="--release"
-      shift
-      ;;
-    *)
-      CMD="$i"
-      ;;
-  esac
-done
+if [[ $1 = -r ]]; then
+  MODE="release"
+  MODE_FLAG="--release"
+  shift
+fi
 
 BASE=$(dirname $(readlink -f $0))
 WAMR=$BASE/deps/wasm-micro-runtime
@@ -127,7 +120,7 @@ RUST_WASM_TARGET="wasm32-unknown-unknown"
 RUST_CONFIG="rust/gtk/Cargo.toml"
 RUST_MODULES_OUT="rust/gtk/target/${RUST_WASM_TARGET}/${MODE}"
 
-case "$CMD" in
+case "$1" in
   gc) # C GTK demo
     setup_deps
     build_gtk_wasm_c
@@ -169,10 +162,11 @@ case "$CMD" in
     ./container +
     ;;
 
-  l) # Lookup store comparison
+  l) # Lookup store performance tests
+    shift
     cd rust/lookup
-    cargo build --bin reader --target wasm32-unknown-unknown
-    cargo run --bin lookup --features lookup -- target/wasm32-unknown-unknown/debug/reader.wasm
+    cargo build --release --bin reader --target wasm32-unknown-unknown
+    cargo run --release --bin lookup --features lookup -- target/wasm32-unknown-unknown/release/reader.wasm "$@"
     ;;
 
   t) # Terminal tests
@@ -201,6 +195,7 @@ case "$CMD" in
       echo "  grc: GTK demo with Rust host and C wasm modules"
       echo "  gcr: GTK demo with C host and Rust wasm modules"
       echo "  h: Heap guard demo"
+      echo "  l: Lookup store performance tests"
       echo "  t: terminal-only tests"
       echo "  i: install dependencies"
       echo "  clean: cleans up build artifacts"

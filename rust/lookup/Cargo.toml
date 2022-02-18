@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-lookup = ["libc", "rand", "wasmi"]
+lookup = ["argparse", "libc", "rand", "wasmi"]
 
 [dependencies]
+argparse = { version = "*", optional = true }
 libc = { version = "*", optional = true }
 rand = { version = "*", optional = true }
 wasmi = { version = "*", optional = true }
